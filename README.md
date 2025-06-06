@@ -1,4 +1,4 @@
-# sample
+# Edu Mentor
 
 A new Flutter project.
 
