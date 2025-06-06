@@ -1,0 +1,43 @@
+{"users": [
+{
+  "localId": "1zvIaLoJ2cQMWmFI1hapc2iriw42",
+  "email": "admin@newinti.edu.my",
+  "emailVerified": false,
+  "passwordHash": "i3FyAM2FUtuhNWonerQKHq5HeVTh/tuWqo9PhG/5/IvAAaI9vlNoXr3QnBIqVj5vKqxC0fMInrj3uB+7cv3DlA==",
+  "salt": "Uora1jAEg4cfzw==",
+  "lastSignedInAt": "1748248749391",
+  "createdAt": "1746880817915",
+  "disabled": false,
+  "customAttributes": "{\"admin\":true}",
+  "providerUserInfo": []
+},
+{
+  "localId": "4B3z0TcjR6e7hqXcOBjBpDiBaRr1",
+  "email": "p23015080@student.newinti.edu.my",
+  "emailVerified": false,
+  "passwordHash": "tsvnsBJkC5bHF0Bbxu8hD3YXd+peyn1/yYNpdwqR9Zj6DlI4iUDXXhxDcTf6QCxCtI6sOJgGOG2HapBJe/JpTQ==",
+  "salt": "SVZDRKpb+flQpA==",
+  "lastSignedInAt": "1748182825359",
+  "createdAt": "1748182825359",
+  "providerUserInfo": []
+},
+{
+  "localId": "5oalOPGFd1QeffZkqfEgN3GEpyE2",
+  "email": "miss@mentor.newinti.edu.my",
+  "emailVerified": false,
+  "passwordHash": "FzQgHGNpgEb9hN+zvemcGbdbqlLux2t+QcLR3n+n3S9azAz4hh059cIfwHQXB7UqRkcAqoOzjTLB/EDLugywew==",
+  "salt": "zw0WnLOcIg6oTQ==",
+  "lastSignedInAt": "1748246089357",
+  "createdAt": "1748246089357",
+  "providerUserInfo": []
+},
+{
+  "localId": "u91lskj5enSFizGYM32bnmZgYxS2",
+  "email": "kavitha@mentor.newinti.edu.my",
+  "emailVerified": false,
+  "passwordHash": "xsqVHphq+sSu99X4l8wN1IrlvXWi5r2tDViC5++N1+dGBsQ6ZHsssOyKFvEngh3Mhc14xEqfCJtpzSEDTlafkg==",
+  "salt": "A+RB0u8JwaeDvQ==",
+  "lastSignedInAt": "1748182872703",
+  "createdAt": "1748182872703",
+  "providerUserInfo": []
+}]}

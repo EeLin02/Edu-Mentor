@@ -1,0 +1,49 @@
+{
+  "project_info": {
+    "project_number": "714584522001",
+    "firebase_url": "https://edumentor-4aa6e-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "edumentor-4aa6e",
+    "storage_bucket": "edumentor-4aa6e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:714584522001:android:9de2992b943ac781dca0b0",
+        "android_client_info": {
+          "package_name": "com.example.edumentor"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJ6SY_5b1sLUrQL8hi8m-g6W0OMiSXcqU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:714584522001:android:7cf17e7c0ef1cba7dca0b0",
+        "android_client_info": {
+          "package_name": "com.example.sample"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJ6SY_5b1sLUrQL8hi8m-g6W0OMiSXcqU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
