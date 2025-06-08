@@ -277,15 +277,40 @@ class _ManageNoticesScreenState extends State<ManageNoticesScreen> {
                             mainAxisAlignment: MainAxisAlignment.start,
                             children: [
                               GestureDetector(
-                                onTap: () => _showLikesDialog(context, notice.id, likedUserIds),
+                                onTap: () async {
+                                  final currentUser = FirebaseAuth.instance.currentUser;
+                                  if (currentUser == null) return;
+
+                                  final noticeRef = FirebaseFirestore.instance.collection('notices').doc(notice.id);
+
+                                  final currentLikes = Map<String, dynamic>.from(notice['likes'] ?? {});
+                                  final userId = currentUser.uid;
+
+                                  setState(() {
+                                    if (currentLikes.containsKey(userId)) {
+                                      currentLikes.remove(userId);
+                                    } else {
+                                      currentLikes[userId] = true;
+                                    }
+                                  });
+
+                                  await noticeRef.update({'likes': currentLikes});
+                                },
                                 child: Row(
                                   children: [
-                                    Icon(Icons.thumb_up, size: 20, color: Colors.deepPurple),
+                                    Icon(
+                                      likedUserIds.contains(FirebaseAuth.instance.currentUser?.uid)
+                                          ? Icons.thumb_up
+                                          : Icons.thumb_up_outlined,
+                                      size: 20,
+                                      color: Colors.deepPurple,
+                                    ),
                                     SizedBox(width: 4),
                                     Text('$likeCount'),
                                   ],
                                 ),
                               ),
+
                               SizedBox(width: 16),
                               GestureDetector(
                                 onTap: () => _showCommentsDialog(context, notice.id),
