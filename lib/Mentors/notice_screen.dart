@@ -181,23 +181,45 @@ class _LatestCommentsWidgetState extends State<LatestCommentsWidget> {
   // Cache mentor names to avoid repeated fetches
   final Map<String, String> _mentorNames = {};
 
-  // Async function to get mentor name by UID with caching
-  Future<String> _getMentorName(String uid) async {
+  // Async function to get user name by UID with caching
+  Future<String> _getUserName(String uid) async {
     if (_mentorNames.containsKey(uid)) {
       return _mentorNames[uid]!;
     }
+
     try {
-      final doc = await FirebaseFirestore.instance.collection('mentors').doc(uid).get();
-      if (doc.exists && doc.data() != null && doc.data()!.containsKey('name')) {
-        final name = doc['name'] as String;
+      // Check mentors
+      final mentorDoc = await FirebaseFirestore.instance.collection('mentors').doc(uid).get();
+      if (mentorDoc.exists && mentorDoc.data()?['name'] != null) {
+        final name = mentorDoc['name'] as String;
         _mentorNames[uid] = name;
         return name;
       }
+
+      // Check students
+      final studentDoc = await FirebaseFirestore.instance.collection('students').doc(uid).get();
+      if (studentDoc.exists && studentDoc.data()?['name'] != null) {
+        final name = studentDoc['name'] as String;
+        _mentorNames[uid] = name;
+        return name;
+      }
+
+      // Check admins
+      final adminDoc = await FirebaseFirestore.instance.collection('admins').doc(uid).get();
+      if (adminDoc.exists && adminDoc.data()?['name'] != null) {
+        final name = adminDoc['name'] as String;
+        _mentorNames[uid] = name;
+        return name;
+      }
+
+      // Not found
+      _mentorNames[uid] = 'Unknown';
       return 'Unknown';
     } catch (e) {
       return 'Unknown';
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -235,7 +257,7 @@ class _LatestCommentsWidgetState extends State<LatestCommentsWidget> {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
               child: FutureBuilder<String>(
-                future: _getMentorName(uid),
+                future: _getUserName(uid),
                 builder: (context, nameSnapshot) {
                   final username = nameSnapshot.data ?? 'Loading...';
 
@@ -281,5 +303,3 @@ class _LatestCommentsWidgetState extends State<LatestCommentsWidget> {
     );
   }
 }
-
-
