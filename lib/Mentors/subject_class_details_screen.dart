@@ -39,10 +39,10 @@ class SubjectClassDetailsScreen extends StatelessWidget {
             _actionButton(
               context,
               icon: Icons.check_circle_outline,
-              label: 'Mark Attendance',
+              label: 'Announcement',
               textColor: textColor,
               onTap: () {
-                Navigator.pushNamed(context, '/markAttendance', arguments: {
+                Navigator.pushNamed(context, '/announcement', arguments: {
                   'subjectName': subjectName,
                   'className': className,
                 });
@@ -52,7 +52,7 @@ class SubjectClassDetailsScreen extends StatelessWidget {
             _actionButton(
               context,
               icon: Icons.chat_bubble_outline,
-              label: '1-on-1 Chat',
+              label: 'Chat to students',
               textColor: textColor,
               onTap: () {
                 Navigator.pushNamed(context, '/classChat', arguments: {

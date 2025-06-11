@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_material_color_picker/flutter_material_color_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
 import 'settings_screen.dart';
 import 'Mentors/subject_class_details_screen.dart';
 import 'Mentors/edit_mentor_profile_screen.dart';

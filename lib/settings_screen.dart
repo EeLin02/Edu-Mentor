@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'theme_notifier.dart';
-import 'font_size_notifier.dart';
 
 class SettingsScreen extends StatefulWidget {
   @override
@@ -35,11 +34,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _notificationsEnabled = data['notificationsEnabled'] ?? true;
       });
 
-      // Apply theme and font size
+      // Apply theme
       final themeNotifier = Provider.of<ThemeNotifier>(context, listen: false);
-      final fontSizeNotifier = Provider.of<FontSizeNotifier>(context, listen: false);
       themeNotifier.toggleTheme(data['darkMode'] ?? false);
-      fontSizeNotifier.setFontSize((data['fontSize'] ?? 14).toDouble());
     }
   }
 
@@ -69,7 +66,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final themeNotifier = Provider.of<ThemeNotifier>(context);
-    final fontSizeNotifier = Provider.of<FontSizeNotifier>(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -99,20 +95,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 themeNotifier.toggleTheme(value);
                 _updateUserSetting('darkMode', value);
               },
-            ),
-            ListTile(
-              title: Text("Font Size (${fontSizeNotifier.fontSize.toInt()})"),
-              subtitle: Slider(
-                min: 12,
-                max: 18,
-                divisions: 6,
-                value: fontSizeNotifier.fontSize,
-                label: fontSizeNotifier.fontSize.toInt().toString(),
-                onChanged: (value) {
-                  fontSizeNotifier.setFontSize(value);
-                  _updateUserSetting('fontSize', value);
-                },
-              ),
             ),
             Divider(height: 40, thickness: 1),
             ListTile(

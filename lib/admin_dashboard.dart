@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'Admin/create_account_screen.dart';
 import 'Admin/edit_admin_profile_screen.dart';
@@ -201,7 +200,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         ),
       ),
       appBar: AppBar(
-        title: Text("MentorLink Admin Dashboard"),
+        title: Text("Edu Mentor Admin Dashboard"),
         backgroundColor: Colors.deepPurple,
         foregroundColor: Colors.white,
         leading: Builder(

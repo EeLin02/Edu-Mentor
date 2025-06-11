@@ -513,6 +513,12 @@ class _AdminEditProfileScreenState extends State<AdminEditProfileScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.deepPurple[100],
                       foregroundColor: Colors.deepPurple,
+                      minimumSize: Size(double.infinity, 48),
+                      elevation: 4,
+                      shadowColor: Colors.deepPurpleAccent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                   SizedBox(height: 10),
@@ -522,6 +528,12 @@ class _AdminEditProfileScreenState extends State<AdminEditProfileScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.deepPurple,
                       foregroundColor: Colors.white,
+                      minimumSize: Size(double.infinity, 48),
+                      elevation: 4,
+                      shadowColor: Colors.deepPurpleAccent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                   SizedBox(height: 10),
@@ -529,8 +541,15 @@ class _AdminEditProfileScreenState extends State<AdminEditProfileScreen> {
                     onPressed: _showCancelConfirmationDialog,
                     child: Text("Cancel"),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey,
-                      foregroundColor: Colors.black,
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.deepPurple,
+                      side: BorderSide(color: Colors.deepPurple, width: 1),
+                      minimumSize: Size(double.infinity, 48),
+                      elevation: 2,
+                      shadowColor: Colors.grey.shade300,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ],
