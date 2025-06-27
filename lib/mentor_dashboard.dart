@@ -148,6 +148,7 @@ class _MentorDashboardState extends State<MentorDashboard> {
           }
 
           tempDepartmentsData[departmentName]!.add({
+            'subjectId': subjectId,
             'subjectName': subjectName,
             'className': className,
             'classId': classId,
@@ -437,6 +438,9 @@ class _MentorDashboardState extends State<MentorDashboard> {
                           builder: (context) => SubjectClassDetailsScreen(
                             subjectName: item['subjectName'],
                             className: item['className'],
+                            subjectId: item['subjectId'],   // Make sure you include this in your item
+                            classId: item['classId'],
+                            mentorId: mentorId ?? '',
                             color: cardColor,
                           ),
                         ),

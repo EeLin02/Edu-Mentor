@@ -4,13 +4,20 @@ class SubjectClassDetailsScreen extends StatelessWidget {
   final String subjectName;
   final String className;
   final Color color;
+  final String subjectId;
+  final String classId;
+  final String mentorId;
 
   const SubjectClassDetailsScreen({
     Key? key,
     required this.subjectName,
     required this.className,
     required this.color,
+    required this.subjectId,
+    required this.classId,
+    required this.mentorId,
   }) : super(key: key);
+
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +27,7 @@ class SubjectClassDetailsScreen extends StatelessWidget {
 
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text('$subjectName · $className', style: TextStyle(color: textColor)),
         backgroundColor: color,
@@ -34,7 +41,11 @@ class SubjectClassDetailsScreen extends StatelessWidget {
           children: [
             _infoCard(textColor),
             const SizedBox(height: 30),
-            _sectionTitle('Home Page', Colors.black),
+            _sectionTitle(
+              'Home Page',
+              Theme.of(context).textTheme.bodyMedium?.color ?? Colors.black,
+            ),
+
             const SizedBox(height: 10),
             _actionButton(
               context,
@@ -45,6 +56,7 @@ class SubjectClassDetailsScreen extends StatelessWidget {
                 Navigator.pushNamed(context, '/announcement', arguments: {
                   'subjectName': subjectName,
                   'className': className,
+                  'color': color,
                 });
               },
             ),
@@ -55,10 +67,19 @@ class SubjectClassDetailsScreen extends StatelessWidget {
               label: 'Chat to students',
               textColor: textColor,
               onTap: () {
-                Navigator.pushNamed(context, '/classChat', arguments: {
-                  'subjectName': subjectName,
-                  'className': className,
-                });
+                Navigator.pushNamed(
+                  context,
+                  '/classChat',
+                  arguments: {
+                    'subjectId': subjectId,
+                    'classId': classId,
+                    'mentorId': mentorId,
+                    'subjectName': subjectName,
+                    'className': className,
+                    'color': color, // optional
+                  },
+                );
+
               },
             ),
             const SizedBox(height: 12),
@@ -71,6 +92,7 @@ class SubjectClassDetailsScreen extends StatelessWidget {
                 Navigator.pushNamed(context, '/shareResources', arguments: {
                   'subjectName': subjectName,
                   'className': className,
+                  'color': color,
                 });
               },
             ),

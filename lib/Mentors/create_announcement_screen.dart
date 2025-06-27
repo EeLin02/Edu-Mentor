@@ -15,6 +15,7 @@ class CreateAnnouncementScreen extends StatefulWidget {
   final String? description;
   final List<dynamic>? files; // URLs
   final List<String>? externalLinks;
+  final Color? color;
 
 
   const CreateAnnouncementScreen({
@@ -26,6 +27,7 @@ class CreateAnnouncementScreen extends StatefulWidget {
     this.description,
     this.files,
     this.externalLinks,
+    this.color,
   }) : super(key: key);
 
   @override
@@ -100,31 +102,6 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
       });
     }
   }
-
-  void _removeExternalLink() async {
-    setState(() {
-      _linkController.clear();
-    });
-
-    // Update Firestore document if editing
-    if (widget.announcementId != null) {
-      try {
-        await FirebaseFirestore.instance
-            .collection('announcements')
-            .doc(widget.announcementId)
-            .update({'externalLink': ''});
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("External link removed successfully")),
-        );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error updating announcement: $e")),
-        );
-      }
-    }
-  }
-
-
 
   void _removeFile(int index) {
     setState(() {
@@ -238,13 +215,17 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final color = widget.color ?? Colors.indigo;
+    final bool isLight = color.computeLuminance() > 0.5;
+    final Color textColor = isLight ? Colors.black87 : Colors.white;
     final theme = Theme.of(context);
+
 
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.announcementId != null ? 'Edit Announcement' : 'New Announcement'),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        backgroundColor: color,
+        foregroundColor: textColor,
         elevation: 4,
       ),
       body: SingleChildScrollView(
@@ -440,8 +421,8 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
                           : (widget.announcementId != null ? "Update Announcement" : "Post Announcement"),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.teal,
-                      foregroundColor: Colors.white,
+                      backgroundColor: color,
+                      foregroundColor: textColor,
                       padding: EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       textStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),

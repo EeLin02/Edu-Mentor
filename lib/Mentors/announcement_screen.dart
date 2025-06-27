@@ -3,18 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class AnnouncementScreen extends StatefulWidget {
-  final String subjectName;
-  final String className;
-
-  const AnnouncementScreen({
-    Key? key,
-    required this.subjectName,
-    required this.className,
-  }) : super(key: key);
+  const AnnouncementScreen({Key? key}) : super(key: key);
 
   @override
   State<AnnouncementScreen> createState() => _AnnouncementScreenState();
 }
+
 
 class _AnnouncementScreenState extends State<AnnouncementScreen> {
   final _announcementsCollection = FirebaseFirestore.instance.collection('announcements');
@@ -40,7 +34,27 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
     }
   }
 
-  void _editAnnouncement(DocumentSnapshot doc) {
+  String _formatTimestamp(Timestamp timestamp) {
+    final date = timestamp.toDate();
+    // Example format: "Jun 11, 2025 14:32"
+    return "${_monthString(date.month)} ${date.day}, ${date.year} ${_twoDigits(date.hour)}:${_twoDigits(date.minute)}";
+  }
+
+  String _monthString(int month) {
+    const months = [
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return months[month];
+  }
+
+  String _twoDigits(int n) {
+    return n.toString().padLeft(2, '0');
+  }
+
+
+  void _editAnnouncement(DocumentSnapshot doc, String subjectName, String className, Color color) {
+
     final data = doc.data() as Map<String, dynamic>;
     print('External links: ${data['externalLinks']}');
 
@@ -48,13 +62,14 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
       context,
       '/createAnnouncement',
       arguments: {
-        'subjectName': widget.subjectName,
-        'className': widget.className,
+        'subjectName': subjectName,
+        'className': className,
         'announcementId': doc.id,
         'title': data['title'],
         'description': data['description'],
         'files': data['files'] ?? [],
         'externalLinks': List<String>.from(data['externalLinks'] ?? []), // 👈 updated
+        'color': color,
       },
     );
   }
@@ -62,16 +77,24 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+    final String subjectName = args['subjectName'];
+    final String className = args['className'];
+    final Color color = args['color'] ?? Colors.teal;
+    // Compute text color based on background brightness
+    final bool isLight = color.computeLuminance() > 0.5;
+    final Color textColor = isLight ? Colors.black87 : Colors.white;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Announcements · ${widget.subjectName} - ${widget.className}'),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        title: Text('Announcements · $subjectName - $className', style: TextStyle(color: textColor)),
+        backgroundColor: color,
+        foregroundColor: textColor, // Also set icon colors etc.
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _announcementsCollection
-            .where('subjectName', isEqualTo: widget.subjectName)
-            .where('className', isEqualTo: widget.className)
+            .where('subjectName', isEqualTo: subjectName)
+            .where('className', isEqualTo: className)
             .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
@@ -106,19 +129,19 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                     data['title'] ?? 'No Title',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
-                  subtitle: Text(
-                    data['description'] ?? 'No Description',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  subtitle: data['timestamp'] != null
+                      ? Text(
+                    'Posted on ${_formatTimestamp(data['timestamp'])}',
                     style: TextStyle(color: Colors.grey[600]),
-                  ),
+                  )
+                      : null,
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
                         tooltip: 'Edit',
                         icon: Icon(Icons.edit, color: Colors.blueGrey),
-                        onPressed: () => _editAnnouncement(doc),
+                        onPressed: () => _editAnnouncement(doc, subjectName, className, color),
                       ),
                       IconButton(
                         tooltip: 'Delete',
@@ -131,7 +154,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                     Navigator.pushNamed(
                       context,
                       '/previewAnnouncement',
-                      arguments: {'docid': doc.id, 'data': data},
+                      arguments: {'docid': doc.id, 'data': data,'color': color,},
                     );
                   },
                 )
@@ -142,15 +165,16 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        backgroundColor: color,
+        foregroundColor: textColor,
         onPressed: () {
           Navigator.pushNamed(
             context,
             '/createAnnouncement',
             arguments: {
-              'subjectName': widget.subjectName,
-              'className': widget.className,
+              'subjectName': subjectName,
+              'className': className,
+              'color': color,
             },
           );
         },

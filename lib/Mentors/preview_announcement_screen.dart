@@ -14,10 +14,14 @@ import 'package:device_info_plus/device_info_plus.dart';
 
 class PreviewAnnouncementScreen extends StatefulWidget {
   final Map<String, dynamic> data;
+  final Color color;
+
 
   const PreviewAnnouncementScreen({
     Key? key,
     required this.data,
+    required this.color,
+
   }) : super(key: key);
 
   @override
@@ -57,14 +61,17 @@ class _PreviewAnnouncementScreenState extends State<PreviewAnnouncementScreen> {
 
   @override
   Widget build(BuildContext context) {
+
     final postedTimestamp = widget.data['timestamp']; // Retrieve the posted timestamp
     final externalLinks = widget.data['externalLinks'] as List? ?? [];
 
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.data['title'] ?? 'Announcement'),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        backgroundColor: widget.color,
+        foregroundColor: ThemeData.estimateBrightnessForColor(widget.color) == Brightness.dark
+            ? Colors.white
+            : Colors.black87,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),

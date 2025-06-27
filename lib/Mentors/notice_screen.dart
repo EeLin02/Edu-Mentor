@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'notice_comment_screen.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+
 
 class NoticeScreen extends StatelessWidget {
   @override
@@ -67,20 +69,46 @@ class NoticeScreen extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(12),
                                   child: GestureDetector(
                                     onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => FullscreenImageView(imageUrl: data['fileUrls'][i]),
-                                        ),
-                                      );
+                                      final fileUrl = data['fileUrls'][i];
+                                      if (fileUrl.toLowerCase().contains('.pdf')) {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => PdfViewerScreen(pdfUrl: fileUrl),
+                                          ),
+                                        );
+                                      } else {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => FullscreenImageView(imageUrl: fileUrl),
+                                          ),
+                                        );
+                                      }
                                     },
-                                    child: CachedNetworkImage(
+                                    child: data['fileUrls'][i].toLowerCase().contains('.pdf')
+                                        ? Container(
+                                      height: 200,
+                                      color: Colors.grey[300],
+                                      child: Center(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.picture_as_pdf, size: 60, color: Colors.red),
+                                            SizedBox(height: 10),
+                                            Text('PDF Document', style: TextStyle(fontSize: 16)),
+                                          ],
+                                        ),
+                                      ),
+                                    )
+                                        : CachedNetworkImage(
                                       imageUrl: data['fileUrls'][i],
                                       fit: BoxFit.cover,
                                       placeholder: (context, url) => Center(child: CircularProgressIndicator()),
                                       errorWidget: (context, url, error) => Icon(Icons.error),
                                     ),
                                   ),
+
 
                                 ),
                               ),
@@ -252,6 +280,7 @@ class _LatestCommentsWidgetState extends State<LatestCommentsWidget> {
             final timeStr = timestamp != null
                 ? '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}'
                 : '';
+            final textColor = Theme.of(context).textTheme.bodyMedium?.color ?? Colors.black;
 
             // Use FutureBuilder to fetch and display mentor name asynchronously
             return Padding(
@@ -278,11 +307,11 @@ class _LatestCommentsWidgetState extends State<LatestCommentsWidget> {
                             children: [
                               TextSpan(
                                 text: '$username: ',
-                                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+                                style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
                               ),
                               TextSpan(
                                 text: commentText,
-                                style: TextStyle(color: Colors.black),
+                                style: TextStyle(color: textColor),
                               ),
                               TextSpan(
                                 text: '  $timeStr',
@@ -300,6 +329,22 @@ class _LatestCommentsWidgetState extends State<LatestCommentsWidget> {
           }).toList(),
         );
       },
+    );
+  }
+}
+
+//--------------pdf fullscreen view------------
+
+class PdfViewerScreen extends StatelessWidget {
+  final String pdfUrl;
+
+  const PdfViewerScreen({required this.pdfUrl, Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('PDF Preview')),
+      body: SfPdfViewer.network(pdfUrl),
     );
   }
 }

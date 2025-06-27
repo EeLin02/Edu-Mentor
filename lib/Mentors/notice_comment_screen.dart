@@ -204,7 +204,9 @@ class _NoticeCommentScreenState extends State<NoticeCommentScreen> {
                                 child: Container(
                                   padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                   decoration: BoxDecoration(
-                                    color: Colors.grey.shade100,
+                                    color: Theme.of(context).brightness == Brightness.dark
+                                        ? Colors.grey[800]
+                                        : Colors.grey.shade100,
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Column(
@@ -217,11 +219,16 @@ class _NoticeCommentScreenState extends State<NoticeCommentScreen> {
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                Text(name,
-                                                    style: TextStyle(
-                                                        fontWeight: FontWeight.bold,
-                                                        fontSize: 14,
-                                                        color: Colors.blueGrey[900])),
+                                              Text(
+                                              name,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                                color: Theme.of(context).brightness == Brightness.dark
+                                                    ? Colors.white
+                                                    : Colors.blueGrey[900],
+                                              ),
+                                            ),
                                                 SizedBox(height: 4),
                                                 Text(text, style: TextStyle(fontSize: 14)),
                                                 SizedBox(height: 6),
@@ -348,9 +355,24 @@ class _NoticeCommentScreenState extends State<NoticeCommentScreen> {
                   },
                   child: Text('Reply'),
                 ),
+                SizedBox(width: 8),  // small spacing between buttons
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      controller.clear();  // clear the input
+                      _showReplyField[commentId] = false;  // hide the reply box
+                    });
+                  },
+                  child: Text('Cancel'),
+                ),
               ],
             ),
           ),
+
       ],
     );
   }
@@ -449,18 +471,27 @@ class _NoticeCommentScreenState extends State<NoticeCommentScreen> {
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Text(name,
-                                                style: TextStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 18,
-                                                    color: Colors.blueGrey[900])),
+                                            Text(
+                                              name,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 18,
+                                                color: Theme.of(context).brightness == Brightness.dark
+                                                    ? Colors.white
+                                                    : Colors.blueGrey[900],
+                                              ),
+                                            ),
                                             SizedBox(height: 4),
                                             Text(
-                                              timestamp != null
-                                                  ? _formatTimestamp(timestamp.toDate())
-                                                  : '',
-                                              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                                              timestamp != null ? _formatTimestamp(timestamp.toDate()) : '',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: Theme.of(context).brightness == Brightness.dark
+                                                    ? Colors.grey[400]  // lighter grey on dark backgrounds
+                                                    : Colors.grey[600], // darker grey on light backgrounds
+                                              ),
                                             ),
+
                                           ],
                                         ),
                                       ),

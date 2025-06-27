@@ -16,6 +16,7 @@ import 'Mentors/announcement_screen.dart';
 import 'Mentors/chat_to_students.dart';
 import 'Mentors/share_resource_screen.dart';
 import 'Mentors/create_announcement_screen.dart';
+import 'Mentors/create_resource_screen.dart';
 import 'Mentors/preview_announcement_screen.dart';
 
 
@@ -58,19 +59,16 @@ class MyApp extends StatelessWidget {
         '/mentorDashboard': (context) => MentorDashboard(),
         '/studentDashboard': (context) => StudentDashboard(),
 
-        // 👇 New routes with arguments handled using ModalRoute
-        '/announcement': (context) {
-          final args = ModalRoute.of(context)!.settings.arguments as Map;
-          return AnnouncementScreen(
-            subjectName: args['subjectName'],
-            className: args['className'],
-          );
-        },
+        //  New routes with arguments handled using ModalRoute
+        '/announcement': (context) => const AnnouncementScreen(),
+
+
         '/createAnnouncement': (context) {
           final args = ModalRoute.of(context)!.settings.arguments as Map;
           return CreateAnnouncementScreen(
             subjectName: args['subjectName'],
             className: args['className'],
+            color: args['color'],
             announcementId: args['announcementId'],
             title: args['title'],
             description: args['description'],
@@ -81,21 +79,52 @@ class MyApp extends StatelessWidget {
         },
         '/previewAnnouncement': (context) {
           final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-          return PreviewAnnouncementScreen(data: args['data']);
+          return PreviewAnnouncementScreen(data: args['data'],color: args['color'],);
         },
         '/classChat': (context) {
-          final args = ModalRoute.of(context)!.settings.arguments as Map;
+          final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+          if (args == null ||
+              args['subjectId'] == null ||
+              args['classId'] == null ||
+              args['mentorId'] == null ||
+              args['subjectName'] == null ||
+              args['className'] == null) {
+            return const Scaffold(
+              body: Center(child: Text("Missing arguments for ClassChatScreen")),
+            );
+          }
+
           return ClassChatScreen(
-            subjectName: args['subjectName'],
-            className: args['className'],
+            subjectId: args['subjectId'] as String,
+            classId: args['classId'] as String,
+            mentorId: args['mentorId'] as String,
+            subjectName: args['subjectName'] as String,
+            className: args['className'] as String,
+            color: args['color'] as Color?, // Can be null
           );
         },
-        '/shareResources': (context) {
-          final args = ModalRoute.of(context)!.settings.arguments as Map;
-          return ShareResourcesScreen(
+
+
+        '/shareResources': (context) => const ResourceScreen(),
+
+        '/createResource': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+          return CreateResourceScreen(
             subjectName: args['subjectName'],
             className: args['className'],
+            color: args['color'],
+            resourceId: args['resourceId'],
+            title: args['title'],
+            description: args['description'],
+            category: args['category'],
+            links: args['links'] != null ? List<String>.from(args['links']) : [],
+            // Add other arguments as needed
           );
+        },
+        '/PreviewResourceScreen': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+          return PreviewAnnouncementScreen(data: args['data'],color: args['color'],);
         },
       },
     );
