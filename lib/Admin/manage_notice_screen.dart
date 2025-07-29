@@ -163,7 +163,9 @@ class _ManageNoticesScreenState extends State<ManageNoticesScreen> {
               final description = notice['description'];
               final fileUrls = List<String>.from(notice['fileUrls'] ?? []);
               final fileNames = List<String>.from(notice['fileNames'] ?? []);
-              final likeMap = notice['likes'] as Map<String, dynamic>? ?? {};
+              final data = notice.data() as Map<String, dynamic>? ?? {};
+              final likeMap = data.containsKey('likes') ? data['likes'] as Map<String, dynamic> : {};
+
               final likeCount = likeMap.length;
               final likedUserIds = likeMap.keys.toList();
 
