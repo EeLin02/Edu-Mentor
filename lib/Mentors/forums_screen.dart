@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'createForumPostScreen.dart';
 import 'forumCommentsScreen.dart';
+import 'EditForumScreen.dart';
 
 
 class ForumsScreen extends StatefulWidget {
@@ -14,49 +15,7 @@ class ForumsScreen extends StatefulWidget {
 class _ForumsScreenState extends State<ForumsScreen> {
   final currentUser = FirebaseAuth.instance.currentUser;
 
-  void _showNewPostDialog() {
-    final TextEditingController _controller = TextEditingController();
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('New Forum Post'),
-        content: TextField(
-          controller: _controller,
-          maxLines: 5,
-          decoration: InputDecoration(hintText: 'Write your question here...'),
-        ),
-        actions: [
-          TextButton(
-            child: Text('Cancel'),
-            onPressed: () => Navigator.pop(context),
-          ),
-          ElevatedButton(
-            child: Text('Post'),
-            onPressed: () async {
-              final text = _controller.text.trim();
-              if (text.isNotEmpty) {
-                final mentorDoc = await FirebaseFirestore.instance
-                    .collection('mentors')
-                    .doc(currentUser!.uid)
-                    .get();
-
-                await FirebaseFirestore.instance.collection('forums').add({
-                  'userId': currentUser!.uid,
-                  'userName': mentorDoc['name'],
-                  'userPhoto': mentorDoc['fileUrl'],
-                  'text': text,
-                  'timestamp': FieldValue.serverTimestamp(),
-                  'likes': [],
-                });
-              }
-              Navigator.pop(context);
-            },
-          ),
-        ],
-      ),
-    );
-  }
 
   void _toggleLike(String postId, List likes) async {
     final userId = currentUser!.uid;
@@ -75,50 +34,8 @@ class _ForumsScreenState extends State<ForumsScreen> {
     }
   }
 
-  void _showCommentDialog(String postId) {
-    final TextEditingController _commentController = TextEditingController();
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Add Comment'),
-        content: TextField(
-          controller: _commentController,
-          decoration: InputDecoration(hintText: 'Write a comment...'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final text = _commentController.text.trim();
-              if (text.isNotEmpty) {
-                final userDoc = await FirebaseFirestore.instance
-                    .collection('mentors')
-                    .doc(currentUser!.uid)
-                    .get();
 
-                await FirebaseFirestore.instance
-                    .collection('forums')
-                    .doc(postId)
-                    .collection('comments')
-                    .add({
-                  'userId': currentUser!.uid,
-                  'userName': userDoc['name'],
-                  'text': text,
-                  'timestamp': FieldValue.serverTimestamp(),
-                });
-              }
-              Navigator.pop(context);
-            },
-            child: Text('Comment'),
-          ),
-        ],
-      ),
-    );
-  }
 
 
   void _deletePost(String docId) async {
@@ -129,13 +46,11 @@ class _ForumsScreenState extends State<ForumsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Forums'),
-        backgroundColor: Colors.teal,
+        title: Text('Forums',style: TextStyle(color: Colors.teal),),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('forums')
-            .where('userId', isEqualTo: currentUser!.uid)
             .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
@@ -183,13 +98,21 @@ class _ForumsScreenState extends State<ForumsScreen> {
                           onSelected: (value) {
                             if (value == 'delete') {
                               _deletePost(data.id);
+                            } else if (value == 'edit') {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => EditForumPostScreen(
+                                    postId: data.id,
+                                    initialText: data['text'],
+                                  ),
+                                ),
+                              );
                             }
                           },
                           itemBuilder: (context) => [
-                            PopupMenuItem(
-                              value: 'delete',
-                              child: Text('Delete'),
-                            ),
+                            PopupMenuItem(value: 'edit', child: Text('Edit')),
+                            PopupMenuItem(value: 'delete', child: Text('Delete')),
                           ],
                         )
                             : null,
@@ -242,7 +165,40 @@ class _ForumsScreenState extends State<ForumsScreen> {
                         ],
                       ),
                       SizedBox(height: 4),
-                      Text('No comments yet', style: TextStyle(color: Colors.grey[600])),
+                      FutureBuilder<QuerySnapshot>(
+                        future: FirebaseFirestore.instance
+                            .collection('forums')
+                            .doc(data.id)
+                            .collection('comments')
+                            .orderBy('timestamp', descending: true)
+                            .limit(1)
+                            .get(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return Text('Loading comment...', style: TextStyle(color: Colors.grey));
+                          }
+
+                          if (snapshot.data!.docs.isEmpty) {
+                            return Text('No comments yet', style: TextStyle(color: Colors.grey));
+                          }
+
+                          final latestComment = snapshot.data!.docs.first;
+                          return Row(
+                            children: [
+                              Icon(Icons.comment, size: 16, color: Colors.grey),
+                              SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  '${latestComment['userName']}: ${latestComment['text']}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(color: Colors.grey[700]),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
