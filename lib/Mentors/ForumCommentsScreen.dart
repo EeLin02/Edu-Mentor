@@ -15,24 +15,59 @@ class _ForumCommentsScreenState extends State<ForumCommentsScreen> {
   final TextEditingController _commentController = TextEditingController();
   Set<String> expandedComments = {};
 
+  String? userRole; // 'mentor' or 'student'
+
+  @override
+  void initState() {
+    super.initState();
+    _determineUserRole();
+  }
+
+  Future<void> _determineUserRole() async {
+    final uid = currentUser!.uid;
+
+    final mentorDoc = await FirebaseFirestore.instance.collection('mentors').doc(uid).get();
+    if (mentorDoc.exists) {
+      setState(() => userRole = 'mentors');
+      return;
+    }
+
+    final studentDoc = await FirebaseFirestore.instance.collection('students').doc(uid).get();
+    if (studentDoc.exists) {
+      setState(() => userRole = 'students');
+    }
+  }
+
+
 
   Future<void> _addComment() async {
     final text = _commentController.text.trim();
     if (text.isEmpty) return;
 
-    final mentorDoc = await FirebaseFirestore.instance
-        .collection('mentors')
-        .doc(currentUser!.uid)
-        .get();
+    // Determine user info (mentor or student)
+    final uid = currentUser!.uid;
+    DocumentSnapshot userDoc;
+
+    // Try mentors first
+    userDoc = await FirebaseFirestore.instance.collection('mentors').doc(uid).get();
+    if (!userDoc.exists) {
+      // If not a mentor, try students
+      userDoc = await FirebaseFirestore.instance.collection('students').doc(uid).get();
+    }
+
+    final userData = userDoc.data() as Map<String, dynamic>?;
+
+    final userName = userData?['name'] ?? 'Unknown User';
+    final userPhoto = userData?['fileUrl'] ?? '';
 
     await FirebaseFirestore.instance
         .collection('forums')
         .doc(widget.postId)
         .collection('comments')
         .add({
-      'userId': currentUser!.uid,
-      'userName': mentorDoc['name'],
-      'userPhoto': mentorDoc['fileUrl'],
+      'userId': uid,
+      'userName': userName,
+      'userPhoto': userPhoto,
       'text': text,
       'timestamp': FieldValue.serverTimestamp(),
       'likes': [],
@@ -40,6 +75,7 @@ class _ForumCommentsScreenState extends State<ForumCommentsScreen> {
 
     _commentController.clear();
   }
+
 
   Future<void> _confirmDelete({
     required String title,
@@ -109,10 +145,20 @@ class _ForumCommentsScreenState extends State<ForumCommentsScreen> {
   Future<void> _addReply(String commentId, String text) async {
     if (text.trim().isEmpty) return;
 
-    final mentorDoc = await FirebaseFirestore.instance
-        .collection('mentors')
-        .doc(currentUser!.uid)
-        .get();
+    final uid = currentUser!.uid;
+    DocumentSnapshot userDoc;
+
+    // Try mentors first
+    userDoc = await FirebaseFirestore.instance.collection('mentors').doc(uid).get();
+    if (!userDoc.exists) {
+      // Try students
+      userDoc = await FirebaseFirestore.instance.collection('students').doc(uid).get();
+    }
+
+    final userData = userDoc.data() as Map<String, dynamic>?;
+
+    final userName = userData?['name'] ?? 'Unknown User';
+    final userPhoto = userData?['fileUrl'] ?? '';
 
     await FirebaseFirestore.instance
         .collection('forums')
@@ -121,14 +167,15 @@ class _ForumCommentsScreenState extends State<ForumCommentsScreen> {
         .doc(commentId)
         .collection('replies')
         .add({
-      'userId': currentUser!.uid,
-      'userName': mentorDoc['name'],
-      'userPhoto': mentorDoc['fileUrl'],
+      'userId': uid,
+      'userName': userName,
+      'userPhoto': userPhoto,
       'text': text,
       'timestamp': FieldValue.serverTimestamp(),
       'likes': [],
     });
   }
+
 
   void _deleteReply(String commentId, String replyId) {
     _confirmDelete(
@@ -235,7 +282,8 @@ class _ForumCommentsScreenState extends State<ForumCommentsScreen> {
                               onPressed: () => _deleteReply(commentId, reply.id),
                               child: Text(
                                 'Delete',
-                                style: TextStyle(color: Colors.teal, fontSize: 12),
+                                style: TextStyle(color: userRole == 'mentors' ? Colors.teal : Colors.blue,
+                                  fontSize: 12,)
                               ),
                             ),
                         ],
@@ -289,7 +337,8 @@ class _ForumCommentsScreenState extends State<ForumCommentsScreen> {
                 onPressed: () => _deleteComment(comment.id),
                 child: Text(
                   'Delete',
-                  style: TextStyle(color: Colors.teal),
+                  style: TextStyle(color: userRole == 'mentors' ? Colors.teal : Colors.blue,
+                    fontSize: 12,)
                 ),
               )
                   : null,
@@ -345,7 +394,7 @@ class _ForumCommentsScreenState extends State<ForumCommentsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Forum Comments'),
-        backgroundColor: Colors.teal,
+        backgroundColor: userRole == 'mentors' ? Colors.teal : Colors.blue,
       ),
       body: Column(
         children: [
@@ -389,7 +438,7 @@ class _ForumCommentsScreenState extends State<ForumCommentsScreen> {
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.send,color: Colors.teal,),
+                  icon: Icon(Icons.send,color: userRole == 'mentors' ? Colors.teal : Colors.blue,),
                   onPressed: _addComment,
                 ),
               ],

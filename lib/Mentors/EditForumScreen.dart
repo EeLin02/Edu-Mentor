@@ -16,11 +16,30 @@ class _EditForumPostScreenState extends State<EditForumPostScreen> {
   late TextEditingController _controller;
   final currentUser = FirebaseAuth.instance.currentUser;
   bool _isUpdating = false;
+  String _userRole = '';
+
+  Color get roleColor => _userRole == 'mentor' ? Colors.teal : Colors.blue;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.initialText);
+    _loadUserRole();
+  }
+
+  Future<void> _loadUserRole() async {
+    final uid = currentUser!.uid;
+
+    final mentorDoc = await FirebaseFirestore.instance.collection('mentors').doc(uid).get();
+    if (mentorDoc.exists) {
+      setState(() => _userRole = 'mentor');
+      return;
+    }
+
+    final studentDoc = await FirebaseFirestore.instance.collection('students').doc(uid).get();
+    if (studentDoc.exists) {
+      setState(() => _userRole = 'student');
+    }
   }
 
   Future<void> _updatePost() async {
@@ -44,7 +63,7 @@ class _EditForumPostScreenState extends State<EditForumPostScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Edit Forum Post'),
-        backgroundColor: Colors.teal,
+        backgroundColor: roleColor,
         elevation: 2,
       ),
       body: SingleChildScrollView(
@@ -84,7 +103,7 @@ class _EditForumPostScreenState extends State<EditForumPostScreen> {
                 icon: Icon(Icons.save, color: Colors.white),
                 label: Text('Update', style: TextStyle(color: Colors.white)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.teal,
+                  backgroundColor: roleColor,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -122,9 +141,9 @@ class _EditForumPostScreenState extends State<EditForumPostScreen> {
                     Navigator.pop(context);
                   }
                 },
-                child: Text('Cancel', style: TextStyle(color: Colors.teal)),
+                child: Text('Cancel', style: TextStyle(color: roleColor)),
                 style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: Colors.teal),
+                  side: BorderSide(color: roleColor),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),

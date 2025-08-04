@@ -12,6 +12,40 @@ class _CreateForumPostScreenState extends State<CreateForumPostScreen> {
   final currentUser = FirebaseAuth.instance.currentUser;
 
   bool _isPosting = false;
+  bool _isMentor = true; // Default to mentor
+  Color _themeColor = Colors.teal; // Default color
+
+  @override
+  void initState() {
+    super.initState();
+    _determineUserRole();
+  }
+
+  Future<void> _determineUserRole() async {
+    final uid = currentUser!.uid;
+
+    final mentorDoc =
+    await FirebaseFirestore.instance.collection('mentors').doc(uid).get();
+
+    if (mentorDoc.exists) {
+      setState(() {
+        _isMentor = true;
+        _themeColor = Colors.teal;
+      });
+    } else {
+      final studentDoc = await FirebaseFirestore.instance
+          .collection('students')
+          .doc(uid)
+          .get();
+
+      if (studentDoc.exists) {
+        setState(() {
+          _isMentor = false;
+          _themeColor = Colors.blue;
+        });
+      }
+    }
+  }
 
   Future<void> _submitPost() async {
     final text = _controller.text.trim();
@@ -21,15 +55,19 @@ class _CreateForumPostScreenState extends State<CreateForumPostScreen> {
       _isPosting = true;
     });
 
-    final mentorDoc = await FirebaseFirestore.instance
-        .collection('mentors')
-        .doc(currentUser!.uid)
+    final uid = currentUser!.uid;
+    final userDoc = await FirebaseFirestore.instance
+        .collection(_isMentor ? 'mentors' : 'students')
+        .doc(uid)
         .get();
 
+    final userName = userDoc['name'];
+    final userPhoto = userDoc['fileUrl']; // Optional: check if it exists
+
     await FirebaseFirestore.instance.collection('forums').add({
-      'userId': currentUser!.uid,
-      'userName': mentorDoc['name'],
-      'userPhoto': mentorDoc['fileUrl'],
+      'userId': uid,
+      'userName': userName,
+      'userPhoto': userPhoto,
       'text': text,
       'timestamp': FieldValue.serverTimestamp(),
     });
@@ -42,7 +80,7 @@ class _CreateForumPostScreenState extends State<CreateForumPostScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Create Forum Post'),
-        backgroundColor: Colors.teal,
+        backgroundColor: _themeColor,
         elevation: 2,
       ),
       body: SingleChildScrollView(
@@ -82,7 +120,7 @@ class _CreateForumPostScreenState extends State<CreateForumPostScreen> {
                 icon: Icon(Icons.send, color: Colors.white),
                 label: Text('Post', style: TextStyle(color: Colors.white)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.teal,
+                  backgroundColor: _themeColor,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -99,5 +137,4 @@ class _CreateForumPostScreenState extends State<CreateForumPostScreen> {
       ),
     );
   }
-
 }

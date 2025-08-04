@@ -46,7 +46,7 @@ class _MentorDashboardState extends State<MentorDashboard> {
   final List<Widget> _screens = [
     // Your full dashboard UI wrapped in a widget
     MentorDashboard(),  // see next for this widget
-    ForumsScreen(),
+    MentorForumScreen(),
     NoticeScreen(),
   ];
 
