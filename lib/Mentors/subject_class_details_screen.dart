@@ -96,6 +96,23 @@ class SubjectClassDetailsScreen extends StatelessWidget {
                 });
               },
             ),
+            const SizedBox(height: 12),
+            _actionButton(
+              context,
+              icon: Icons.fact_check_outlined,
+              label: 'Take Attendance',
+              textColor: textColor,
+              onTap: () {
+                Navigator.pushNamed(context, '/takeAttendance', arguments: {
+                  'subjectId': subjectId,
+                  'classId': classId,
+                  'mentorId': mentorId,
+                  'subjectName': subjectName,
+                  'className': className,
+                  'color': color,
+                });
+              },
+            ),
           ],
         ),
       ),

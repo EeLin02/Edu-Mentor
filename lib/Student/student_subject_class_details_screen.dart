@@ -4,12 +4,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class StudentSubjectClassDetailsScreen extends StatefulWidget {
   final String classId;
   final String subjectId;
+  final String studentId;
   final Color color;
 
   const StudentSubjectClassDetailsScreen({
     super.key,
     required this.classId,
     required this.subjectId,
+    required this.studentId,
     required this.color,
   });
 
@@ -236,11 +238,16 @@ class _StudentSubjectClassDetailsScreenState
               label: 'Attendance Records',
               textColor: textColor,
               onTap: () {
-                Navigator.pushNamed(context, '/attendanceRecord', arguments: {
-                  'subjectName': subjectName,
-                  'className': className,
-                  'color': color,
-                });
+                Navigator.pushNamed(
+                  context,
+                  '/studentAttendanceRecords',
+                  arguments: {
+                    'classId': widget.classId,
+                    'subjectId': widget.subjectId,
+                    'studentId': widget.studentId, // from list or Firestore query
+                    'color': widget.color,
+                  },
+                );
               },
             ),
 

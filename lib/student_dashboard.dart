@@ -311,6 +311,7 @@ class _StudentDashboardScreenState extends State<StudentDashboard> {
                   builder: (_) => StudentSubjectClassDetailsScreen(
                     subjectId: item['subjectId'],
                     classId: item['classId'],
+                    studentId: studentId,
                     color: cardColor,
                   ),
                 ),

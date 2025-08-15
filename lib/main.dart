@@ -18,6 +18,8 @@ import 'Mentors/share_resource_screen.dart';
 import 'Mentors/create_announcement_screen.dart';
 import 'Mentors/create_resource_screen.dart';
 import 'Mentors/preview_announcement_screen.dart';
+import 'Mentors/take_attendance_screen.dart';
+
 
 import 'Student/student_announcement_screen.dart';
 import 'Student/chat_to_mentor.dart';
@@ -25,6 +27,7 @@ import 'Student/student_private_chat_screen.dart';
 import 'Student/student_share_resource_screen.dart';
 import 'Student/student_notes_screen.dart';
 import 'Student/student_notes_detail_screen.dart';
+import 'Student/student_attendance_record.dart';
 
 
 void main() async {
@@ -154,6 +157,42 @@ class MyApp extends StatelessWidget {
           final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
           return PreviewAnnouncementScreen(data: args['data'],color: args['color'],);
         },
+
+        '/takeAttendance': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+          return TakeAttendanceScreen(
+            subjectId: args['subjectId'],
+            classId: args['classId'],
+            mentorId: args['mentorId'],
+            subjectName: args['subjectName'],
+            className: args['className'],
+            color: args['color'],
+          );
+        },
+
+        '/studentAttendanceRecords': (context) {
+          final args = ModalRoute.of(context)?.settings.arguments;
+
+          if (args is Map<String, dynamic>) {
+            return StudentAttendanceRecordsScreen(
+              classId: args['classId'] ?? '',
+              subjectId: args['subjectId'] ?? '',
+              studentId: args['studentId'] ?? '',
+              color: args['color'] ?? Colors.blue, // fallback color
+            );
+          }
+
+          // Fallback UI if arguments are missing/wrong type
+          return const Scaffold(
+            body: Center(
+              child: Text(
+                'Missing or invalid arguments for StudentAttendanceRecordsScreen',
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+          );
+        },
+
 
         '/studentNotes': (context) => const StudentNotesPage(),
 
