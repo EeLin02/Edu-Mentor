@@ -125,9 +125,15 @@ class _EditGroupEnrollmentScreenState extends State<EditGroupEnrollmentScreen> {
           if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
 
           final students = snapshot.data!.docs
-              .where((doc) =>
-          !lockedStudentIds.contains(doc.id) &&
-              (doc['name']?.toString().toLowerCase() ?? '').contains(_searchKeyword))
+              .where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final isDisabled = (data['disabled'] ?? false) == true;
+            final matchesSearch = (data['name']?.toString().toLowerCase() ?? '')
+                .contains(_searchKeyword);
+            return !lockedStudentIds.contains(doc.id) &&
+                !isDisabled &&
+                matchesSearch;
+          })
               .toList();
 
           return ListView(

@@ -12,7 +12,8 @@ class NoticeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Notices')),
+      appBar: AppBar(title: Text('Notices',style: TextStyle(color: Colors.blue),),
+      ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('notices')

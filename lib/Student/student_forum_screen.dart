@@ -64,7 +64,7 @@ class _StudentForumScreenState extends State<StudentForumScreen> with SingleTick
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Student Forums', style: TextStyle(color: Colors.blue)),
+        title: Text('Forums', style: TextStyle(color: Colors.blue)),
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.blue,

@@ -262,64 +262,89 @@ class _StudentDashboardScreenState extends State<StudentDashboard> {
   Widget _buildDashboardBody() {
     return enrolledClasses.isEmpty
         ? Center(child: Text("No enrolled classes found."))
-        : ListView.builder(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      itemCount: enrolledClasses.length,
-      itemBuilder: (context, index) {
-        final item = enrolledClasses[index];
-        final cardColor = item['color'] ?? Colors.blue;
-
-        final textColor = cardColor.computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
-        final subtitleColor = cardColor.computeLuminance() > 0.5 ? Colors.black54 : Colors.white70;
-
-        return AnimatedContainer(
-          duration: Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-          margin: const EdgeInsets.symmetric(vertical: 6),
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: cardColor.withOpacity(0.4),
-                blurRadius: 6,
-                offset: Offset(0, 4),
-              ),
-            ],
+        : Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Courses",
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.blue,
+            ),
           ),
-          child: ListTile(
-            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            title: Text(
-              item['subjectName'],
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: textColor,
-              ),
-            ),
-            subtitle: Text(
-              item['className'],
-              style: TextStyle(
-                color: subtitleColor,
-                fontSize: 14,
-              ),
-            ),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => StudentSubjectClassDetailsScreen(
-                    subjectId: item['subjectId'],
-                    classId: item['classId'],
-                    studentId: studentId,
+          const SizedBox(height: 10),
+          Expanded(
+            child: ListView.builder(
+              itemCount: enrolledClasses.length,
+              itemBuilder: (context, index) {
+                final item = enrolledClasses[index];
+                final cardColor = item['color'] ?? Colors.blue;
+
+                final textColor = cardColor.computeLuminance() > 0.5
+                    ? Colors.black87
+                    : Colors.white;
+                final subtitleColor = cardColor.computeLuminance() > 0.5
+                    ? Colors.black54
+                    : Colors.white70;
+
+                return AnimatedContainer(
+                  duration: Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  margin: const EdgeInsets.symmetric(vertical: 6),
+                  decoration: BoxDecoration(
                     color: cardColor,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: cardColor.withOpacity(0.4),
+                        blurRadius: 6,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
                   ),
-                ),
-              );
-            },
+                  child: ListTile(
+                    contentPadding:
+                    EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    title: Text(
+                      item['subjectName'],
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: textColor,
+                      ),
+                    ),
+                    subtitle: Text(
+                      item['className'],
+                      style: TextStyle(
+                        color: subtitleColor,
+                        fontSize: 14,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              StudentSubjectClassDetailsScreen(
+                                subjectId: item['subjectId'],
+                                classId: item['classId'],
+                                studentId: studentId,
+                                color: cardColor,
+                              ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
+
 }

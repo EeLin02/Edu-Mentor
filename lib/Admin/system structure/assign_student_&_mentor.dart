@@ -144,20 +144,30 @@ class _MentorAssignmentPageState extends State<MentorAssignmentPage> {
                   .snapshots(),
               builder: (ctx, snapshot) {
                 if (!snapshot.hasData) return CircularProgressIndicator();
+
+                final mentors = snapshot.data!.docs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>? ?? {};
+                  // only include mentors who are NOT disabled
+                  return data['disabled'] != true;
+                }).toList();
+
                 return DropdownButton<String>(
                   value: selectedMentorId,
                   hint: Text('Select Mentor'),
                   isExpanded: true,
-                  items: snapshot.data!.docs.map((doc) {
+                  items: mentors.map((doc) {
+                    final data = doc.data() as Map<String, dynamic>? ?? {};
+                    final name = data['name'] ?? '(No Name)';
                     return DropdownMenuItem(
                       value: doc.id,
-                      child: Text(doc['name']),
+                      child: Text(name),
                     );
                   }).toList(),
                   onChanged: (val) => setState(() => selectedMentorId = val),
                 );
               },
             ),
+
 
           SizedBox(height: 16),
 
@@ -384,7 +394,6 @@ class _MentorAssignmentPageState extends State<MentorAssignmentPage> {
       selectedClassIds.clear();
     });
   }
-
 }
 
 
@@ -555,10 +564,18 @@ class _StudentEnrollmentPageState extends State<StudentEnrollmentPage> {
                     }
                     final isSelected = selectedStudentIds.contains(studentId);
 
+                    final data = doc.data() as Map<String, dynamic>?; // may be null
+                    final isDisabled = data?['disabled'] ?? false;
+
                     return CheckboxListTile(
-                      title: Text(doc['name']),
+                      title: Text(
+                        doc['name'],
+                        style: TextStyle(
+                          color: isDisabled ? Colors.grey : Colors.black,
+                        ),
+                      ),
                       value: isSelected && isEnrolled != true,
-                      onChanged: isEnrolled == true
+                      onChanged: (isDisabled || isEnrolled == true)
                           ? null
                           : (checked) {
                         setState(() {
@@ -569,10 +586,14 @@ class _StudentEnrollmentPageState extends State<StudentEnrollmentPage> {
                           }
                         });
                       },
-                      secondary: isEnrolled == true
-                          ? Text('Enrolled', style: TextStyle(color: Colors.red))
+                      secondary: isDisabled
+                          ? Text('Disabled', style: TextStyle(color: Colors.red))
+                          : isEnrolled == true
+                          ? Text('Enrolled', style: TextStyle(color: Colors.blue))
                           : null,
                     );
+
+
                   }).toList(),
                 );
               },
