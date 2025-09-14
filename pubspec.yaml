@@ -41,6 +41,8 @@ dependencies:
   syncfusion_flutter_pdfviewer: ^29.2.10
   emoji_picker_flutter: ^4.3.0
   foundation: ^0.0.5
+  fl_chart: ^0.70.0
+
 
 
 

@@ -113,6 +113,27 @@ class SubjectClassDetailsScreen extends StatelessWidget {
                 });
               },
             ),
+            const SizedBox(height: 12),
+            _actionButton(
+              context,
+              icon: Icons.emoji_events_outlined,
+              label: 'Weekly Quiz',
+              textColor: textColor,
+              onTap: () {
+                Navigator.pushNamed(
+                  context,
+                  '/weeklyQuiz',
+                  arguments: {
+                    'subjectId': subjectId,
+                    'classId': classId,
+                    'mentorId': mentorId,
+                    'subjectName': subjectName,
+                    'className': className,
+                    'color': color,
+                  },
+                );
+              },
+            ),
           ],
         ),
       ),

@@ -19,6 +19,7 @@ import 'Mentors/create_announcement_screen.dart';
 import 'Mentors/create_resource_screen.dart';
 import 'Mentors/preview_announcement_screen.dart';
 import 'Mentors/take_attendance_screen.dart';
+import 'Mentors/weekly_quiz_screen.dart';
 
 
 import 'Student/student_announcement_screen.dart';
@@ -28,6 +29,9 @@ import 'Student/student_share_resource_screen.dart';
 import 'Student/student_notes_screen.dart';
 import 'Student/student_notes_detail_screen.dart';
 import 'Student/student_attendance_record.dart';
+import 'Student/student_quiz_screen.dart';
+import 'Student/take_quiz_screen.dart';
+
 
 
 void main() async {
@@ -170,6 +174,20 @@ class MyApp extends StatelessWidget {
           );
         },
 
+        '/weeklyQuiz': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+
+          return WeeklyQuizScreen(
+            subjectId: args['subjectId'],
+            classId: args['classId'],
+            mentorId: args['mentorId'],
+            subjectName: args['subjectName'],
+            className: args['className'],
+            color: args['color'],
+          );
+        },
+
+
         '/studentAttendanceRecords': (context) {
           final args = ModalRoute.of(context)?.settings.arguments;
 
@@ -206,6 +224,26 @@ class MyApp extends StatelessWidget {
           );
         },
 
+        '/studentQuizzes': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+          return StudentQuizzesScreen(
+            classId: args['classId'],
+            subjectId: args['subjectId'],
+            studentId: args['studentId'],
+            color: args['color'],
+          );
+        },
+        '/takeQuiz': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+          return TakeQuizScreen(
+            quizId: args['quizId'],
+            studentId: args['studentId'],
+            classId: args['classId'],
+            subjectId: args['subjectId'],
+            color: args['color'],
+            title: args['title'],
+          );
+        },
 
 
       },

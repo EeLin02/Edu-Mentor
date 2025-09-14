@@ -250,6 +250,25 @@ class _StudentSubjectClassDetailsScreenState
                 );
               },
             ),
+            const SizedBox(height: 14),
+            _actionButton(
+              icon: Icons.quiz_outlined,
+              label: 'Quizzes',
+              textColor: textColor,
+              onTap: () {
+                Navigator.pushNamed(
+                  context,
+                  '/studentQuizzes',
+                  arguments: {
+                    'classId': widget.classId,
+                    'subjectId': widget.subjectId,
+                    'studentId': widget.studentId,
+                    'color': color,
+                  },
+                );
+              },
+            ),
+
 
           ],
         ),
