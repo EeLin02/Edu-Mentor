@@ -1,6 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
 
 import 'package:provider/provider.dart';
 
@@ -32,6 +37,27 @@ import 'Student/student_attendance_record.dart';
 import 'Student/student_quiz_screen.dart';
 import 'Student/take_quiz_screen.dart';
 
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  print("Handling a background message: ${message.messageId}");
+}
+
+void _handleNotificationTap(String announcementId) {
+  navigatorKey.currentState?.pushNamed(
+    '/studentAnnouncement',
+    arguments: {
+      "announcementId": announcementId,
+      "color": Colors.teal,
+    },
+  );
+}
+
+
+// Local notification plugin instance
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+FlutterLocalNotificationsPlugin();
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 
 void main() async {
@@ -39,9 +65,106 @@ void main() async {
 
   await Firebase.initializeApp();
 
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // Ask notification permission
+  NotificationSettings settings = await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+
+  if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+    print('✅ User granted permission');
+  } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
+    print('⚠️ User granted provisional permission');
+  } else {
+    print('❌ User declined or has not accepted permission');
+  }
+
+  // When app opened from notification
+  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+    if (message.data['announcementId'] != null) {
+      navigatorKey.currentState?.pushNamed(
+        '/studentAnnouncement',
+        arguments: {
+          "announcementId": message.data['announcementId'],
+          "color": Colors.teal, // or any default
+        },
+      );
+    }
+  });
+
+
+  // Foreground message listener
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+    print("📩 Foreground message received: ${message.notification?.title}");
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      final doc = await FirebaseFirestore.instance
+          .collection('userSettings')
+          .doc(uid)
+          .get();
+
+      if (doc.exists && doc.data()?['notificationsEnabled'] == false) {
+        print("🔕 Notifications disabled for this user, skipping...");
+        return; // Stop here
+      }
+    }
+
+    // Show local notification if enabled
+    if (message.notification != null) {
+      const AndroidNotificationDetails androidPlatformChannelSpecifics =
+      AndroidNotificationDetails(
+        'high_importance_channel',
+        'High Importance Notifications',
+        importance: Importance.max,
+        priority: Priority.high,
+        showWhen: true,
+      );
+
+      const NotificationDetails platformChannelSpecifics =
+      NotificationDetails(android: androidPlatformChannelSpecifics);
+
+      await flutterLocalNotificationsPlugin.show(
+        message.hashCode,
+        message.notification!.title,
+        message.notification!.body,
+        platformChannelSpecifics,
+        payload: message.data['announcementId'],
+      );
+    }
+  });
+
   await FirebaseAppCheck.instance.activate(
     androidProvider: AndroidProvider.debug,
   );
+
+
+  await FirebaseAppCheck.instance.activate(androidProvider: AndroidProvider.debug);
+
+  const AndroidInitializationSettings initializationSettingsAndroid =
+  AndroidInitializationSettings('@mipmap/ic_launcher');
+
+  const InitializationSettings initializationSettings =
+  InitializationSettings(android: initializationSettingsAndroid);
+
+  await flutterLocalNotificationsPlugin.initialize(
+    initializationSettings,
+    onDidReceiveNotificationResponse: (NotificationResponse response) {
+      if (response.payload != null) {
+        navigatorKey.currentState?.pushNamed(
+          '/studentAnnouncement',
+          arguments: {
+            "announcementId": response.payload!,
+            "color": Colors.teal,
+          },
+        );
+      }
+    },
+  );
+
 
   runApp(
     MultiProvider(
@@ -63,6 +186,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Mentor Link',
       debugShowCheckedModeBanner: false,
+      navigatorKey: navigatorKey,
       theme: themeNotifier.isDarkMode ? ThemeData.dark() : ThemeData.light(),
 
       initialRoute: '/login',
@@ -81,7 +205,9 @@ class MyApp extends StatelessWidget {
         '/createAnnouncement': (context) {
           final args = ModalRoute.of(context)!.settings.arguments as Map;
           return CreateAnnouncementScreen(
+            subjectId: args['subjectId'],
             subjectName: args['subjectName'],
+            classId: args['classId'],
             className: args['className'],
             color: args['color'],
             announcementId: args['announcementId'],

@@ -65,7 +65,7 @@ class _StudentClassChatScreenState extends State<StudentClassChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Chat With Mentor · ${widget.subjectName} - ${widget.className}'),
+        title: Text('Chat With Mentor'),
         backgroundColor: appBarColor,
         foregroundColor: textColor,
       ),
@@ -83,33 +83,71 @@ class _StudentClassChatScreenState extends State<StudentClassChatScreen> {
           final mentorName = snapshot.data!['name']!;
           final profileUrl = snapshot.data!['profileUrl']!;
 
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              ListTile(
-                leading: CircleAvatar(
-                  radius: 28,
-                  backgroundImage: profileUrl.isNotEmpty ? NetworkImage(profileUrl) : null,
-                  child: profileUrl.isEmpty ? const Icon(Icons.person, size: 28) : null,
-                ),
-                title: Text(
-                  mentorName,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-                ),
-                trailing: const Icon(Icons.chat_bubble_outline),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => PrivateChatScreen(
-                        mentorId: widget.mentorId,
-                        mentorName: mentorName,
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircleAvatar(
+                        radius: 50,
+                        backgroundImage: profileUrl.isNotEmpty ? NetworkImage(profileUrl) : null,
+                        child: profileUrl.isEmpty ? const Icon(Icons.person, size: 50) : null,
                       ),
-                    ),
-                  );
-                },
+                      const SizedBox(height: 16),
+                      Text(
+                        mentorName,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${widget.subjectName} · ${widget.className}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => PrivateChatScreen(
+                                  mentorId: widget.mentorId,
+                                  mentorName: mentorName,
+                                ),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.chat),
+                          label: const Text(
+                            'Chat with Mentor',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ],
+            ),
           );
         },
       ),

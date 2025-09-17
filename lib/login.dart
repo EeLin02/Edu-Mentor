@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'admin_dashboard.dart';
 import 'mentor_dashboard.dart';
@@ -42,17 +44,40 @@ class _LoginScreenState extends State<LoginScreen> {
       final claims = idTokenResult.claims ?? {};
       print("Custom Claims: $claims");
 
+      // 🔹 Request FCM token
+      final fcm = FirebaseMessaging.instance;
+      await fcm.requestPermission();
+      final token = await fcm.getToken();
+
       if (claims['admin'] == true) {
+        if (token != null) {
+          await FirebaseFirestore.instance.collection('admins').doc(user.uid).set(
+            {'fcmToken': token},
+            SetOptions(merge: true),
+          );
+        }
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => AdminDashboard()),
         );
       } else if (email.endsWith("@newinti.edu.my")) {
+        if (token != null) {
+          await FirebaseFirestore.instance.collection('mentors').doc(user.uid).set(
+            {'fcmToken': token},
+            SetOptions(merge: true),
+          );
+        }
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => MentorDashboard()),
         );
       } else if (email.endsWith("@student.newinti.edu.my")) {
+        if (token != null) {
+          await FirebaseFirestore.instance.collection('students').doc(user.uid).set(
+            {'fcmToken': token},
+            SetOptions(merge: true),
+          );
+        }
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => StudentDashboard()),

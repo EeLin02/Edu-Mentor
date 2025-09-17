@@ -9,6 +9,7 @@ import 'Student/edit_student_profile_screen.dart';
 import 'Student/student_card.dart';
 import 'Student/student_notice_screen.dart';
 import 'Student/student_forum_screen.dart';
+import 'Student/student_notification_screen.dart';
 
 class StudentDashboard extends StatefulWidget {
   const StudentDashboard({super.key});
@@ -154,9 +155,10 @@ class _StudentDashboardScreenState extends State<StudentDashboard> {
   @override
   Widget build(BuildContext context) {
     final List<Widget> _screens = [
-      _buildDashboardBody(),
-      StudentForumScreen(),
-      NoticeScreen(),
+    _buildDashboardBody(),
+    StudentForumScreen(),
+    StudentNotificationScreen(), // <-- NEW TAB
+    NoticeScreen(),
     ];
 
     Future<Map<String, dynamic>?> _fetchStudentProfile() async {
@@ -249,7 +251,8 @@ class _StudentDashboardScreenState extends State<StudentDashboard> {
         items: [
           BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
           BottomNavigationBarItem(icon: Icon(Icons.forum), label: 'Forums'),
-          BottomNavigationBarItem(icon: Icon(Icons.notifications), label: 'Event Notices'),
+          BottomNavigationBarItem(icon: Icon(Icons.notifications), label: 'Notifications'),
+          BottomNavigationBarItem(icon: Icon(Icons.article), label: 'Event Notices'),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.blue,

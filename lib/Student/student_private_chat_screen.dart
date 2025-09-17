@@ -68,8 +68,13 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
     await messageCollection.add({
       'text': text,
       'senderId': studentId,
+      'senderRole': "student",
+      'mentorId': widget.mentorId, // <-- useful for SLA check
+      'studentId': studentId,      // <-- useful for SLA check
       'timestamp': FieldValue.serverTimestamp(),
+      'slaNotified': false,        // <-- optional default
     });
+
 
     _messageController.clear();
   }
@@ -293,7 +298,11 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
           'fileName': fileName,
           'fileType': mimeType,
           'senderId': studentId,
+          'senderRole': "student",
+          'mentorId': widget.mentorId,
+          'studentId': studentId,
           'timestamp': FieldValue.serverTimestamp(),
+          'slaNotified': false,
         });
       } catch (e) {
         debugPrint("File upload error: $e");

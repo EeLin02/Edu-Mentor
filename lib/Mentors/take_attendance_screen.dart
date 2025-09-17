@@ -28,11 +28,13 @@ class TakeAttendanceScreen extends StatefulWidget {
 
 class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  Map<String, String> _attendance = {}; // 'P' or 'A'
+  Map<String, String> _attendance = {}; // 'P', 'A', 'MC'
   List<Map<String, dynamic>> _students = [];
+  List<Map<String, dynamic>> _filteredStudents = [];
   bool _loading = true;
   bool _alreadySaved = false;
   late DateTime selectedDate;
+  String _searchQuery = '';
 
   bool get _isEditMode => widget.initialDate != null;
 
@@ -77,9 +79,14 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
 
       setState(() {
         _students = students;
+        _filteredStudents = students;
         _attendance = {
           for (var s in students)
-            s['id']: data[s['id']] == true ? 'P' : 'A'
+            s['id']: data[s['id']] == true
+                ? 'P'
+                : data[s['id']] == 'MC'
+                ? 'MC'
+                : 'A'
         };
         _alreadySaved = attendanceDoc.exists && !_isEditMode;
         _loading = false;
@@ -91,6 +98,15 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
   }
 
   Future<void> _saveAttendance() async {
+    // Ensure all students are marked
+    bool allSelected = _students.every((s) => _attendance[s['id']] != null);
+    if (!allSelected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please mark attendance for all students before saving.')),
+      );
+      return;
+    }
+
     final dateStr = selectedDate.toIso8601String().split('T')[0];
     final docRef = _firestore
         .collection('attendance')
@@ -101,6 +117,10 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
     final data = {
       for (var entry in _attendance.entries)
         entry.key: entry.value == 'P'
+            ? true
+            : entry.value == 'MC'
+            ? 'MC'
+            : false
     };
 
     await docRef.set(data);
@@ -115,6 +135,33 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
     }
   }
 
+  void _filterStudents(String query) {
+    setState(() {
+      _searchQuery = query;
+      _filteredStudents = _students
+          .where((s) => s['name'].toLowerCase().contains(query.toLowerCase()))
+          .toList();
+    });
+  }
+
+  Future<void> _pickDate() async {
+    final today = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDate,
+      firstDate: _isEditMode ? DateTime(2000) : today,
+      lastDate: DateTime(2100),
+    );
+
+    if (picked != null && picked != selectedDate) {
+      setState(() {
+        selectedDate = picked;
+        _loading = true;
+      });
+      await _loadStudentsAndAttendance();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final appBarColor = widget.color ?? Colors.teal;
@@ -123,7 +170,9 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${_isEditMode ? 'Edit' : 'Take'} Attendance · ${widget.subjectName} - ${widget.className}'),
+        title: Text(
+          '${_isEditMode ? 'Edit' : 'Take'} Attendance · ${widget.subjectName} - ${widget.className}',
+        ),
         backgroundColor: appBarColor,
         foregroundColor: textColor,
       ),
@@ -135,21 +184,44 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
-            child: Text(
-              '${_isEditMode ? 'Editing record for' : 'Date:'} ${selectedDate.toLocal().toString().split(' ')[0]}',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: widget.color,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${_isEditMode ? 'Editing record for' : 'Date:'} ${selectedDate.toLocal().toString().split(' ')[0]}',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: widget.color,
+                  ),
+                ),
+                if (!_isEditMode)
+                  TextButton.icon(
+                    onPressed: _pickDate,
+                    icon: const Icon(Icons.calendar_today),
+                    label: const Text("Select Date"),
+                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: TextField(
+              decoration: const InputDecoration(
+                hintText: 'Search students...',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(12))),
               ),
+              onChanged: _filterStudents,
             ),
           ),
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              itemCount: _students.length,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              itemCount: _filteredStudents.length,
               itemBuilder: (context, index) {
-                final student = _students[index];
+                final student = _filteredStudents[index];
                 final id = student['id'];
                 final name = student['name'];
                 final photo = student['photo'];
@@ -196,7 +268,7 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
                                     },
                                   ),
                                   const Text('Present'),
-                                  const SizedBox(width: 12),
+                                  const SizedBox(width: 8),
                                   Radio<String>(
                                     activeColor: widget.color ?? Colors.teal,
                                     value: 'A',
@@ -208,6 +280,18 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
                                     },
                                   ),
                                   const Text('Absent'),
+                                  const SizedBox(width: 8),
+                                  Radio<String>(
+                                    activeColor: widget.color ?? Colors.teal,
+                                    value: 'MC',
+                                    groupValue: status,
+                                    onChanged: (val) {
+                                      setState(() {
+                                        _attendance[id] = val!;
+                                      });
+                                    },
+                                  ),
+                                  const Text('MC'),
                                 ],
                               ),
                             ],
@@ -220,7 +304,6 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
               },
             ),
           ),
-
           if (!_alreadySaved || _isEditMode)
             Padding(
               padding: const EdgeInsets.all(12.0),
@@ -232,15 +315,20 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: _saveAttendance,
-                icon: const Icon(Icons.save), label: Text(_isEditMode ? "Update Attendance" : "Save Attendance"),
+                icon: const Icon(Icons.save),
+                label: Text(_isEditMode ? "Update Attendance" : "Save Attendance"),
               ),
             )
           else
             const Padding(
               padding: EdgeInsets.all(12.0),
-              child: Text("Attendance already submitted for today.",
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16,
-                  color: Colors.grey,),
+              child: Text(
+                "Attendance already submitted for today.",
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                  color: Colors.grey,
+                ),
               ),
             ),
         ],
@@ -248,8 +336,8 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
       floatingActionButton: !_isEditMode
           ? FloatingActionButton.extended(
         heroTag: "viewHistory",
-        onPressed: () {
-          Navigator.push(
+        onPressed: () async {
+          final result = await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (_) => AttendanceRecordsScreen(
@@ -262,12 +350,19 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
               ),
             ),
           );
+
+          // If a record was deleted, reload the attendance
+          if (result == true) {
+            setState(() {
+              _loading = true;
+            });
+            await _loadStudentsAndAttendance();
+          }
         },
         icon: const Icon(Icons.history),
         label: const Text("View Records"),
         backgroundColor: widget.color ?? Colors.teal,
         foregroundColor: Colors.white,
-
       )
           : null,
     );

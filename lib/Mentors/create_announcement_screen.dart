@@ -8,8 +8,10 @@ import 'package:path/path.dart' as path;
 import 'package:firebase_auth/firebase_auth.dart';
 
 class CreateAnnouncementScreen extends StatefulWidget {
-  final String subjectName;
-  final String className;
+  final String? subjectId;
+  final String? subjectName;
+  final String? classId;
+  final String? className;
   final String? announcementId;
   final String? title;
   final String? description;
@@ -20,7 +22,9 @@ class CreateAnnouncementScreen extends StatefulWidget {
 
   const CreateAnnouncementScreen({
     Key? key,
+    required this.subjectId,
     required this.subjectName,
+    required this.classId,
     required this.className,
     this.announcementId,
     this.title,
@@ -176,8 +180,10 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
     final fileUrls = [..._existingFileUrls, ...newFileUrls];
 
     final data = {
-      'subjectName': widget.subjectName,
-      'className': widget.className,
+      'subjectId': widget.subjectId ?? '',
+      'subjectName': widget.subjectName ?? '',
+      'classId': widget.classId ?? '',
+      'className': widget.className ?? '',
       'title': title,
       'description': description,
       'files': fileUrls,

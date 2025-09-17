@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'theme_notifier.dart';
 
@@ -80,11 +81,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: Text("Enable Notifications"),
               subtitle: Text("Toggle app notifications on/off"),
               value: _notificationsEnabled,
-              onChanged: (value) {
+              onChanged: (value) async {
                 setState(() {
                   _notificationsEnabled = value;
                 });
-                _updateUserSetting('notificationsEnabled', value);
+
+                // Save to Firestore
+                await _updateUserSetting('notificationsEnabled', value);
+
+                // Subscribe / Unsubscribe from topic
+                if (value) {
+                  await FirebaseMessaging.instance.subscribeToTopic('announcements');
+                  print("✅ Subscribed to announcements");
+                } else {
+                  await FirebaseMessaging.instance.unsubscribeFromTopic('announcements');
+                  print("❌ Unsubscribed from announcements");
+                }
               },
             ),
             SwitchListTile(
@@ -113,7 +125,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: Text("Privacy Policy"),
               onTap: () {
                 _showLegalDialog("Privacy Policy", """
-This is the privacy policy of the Edu Mentor app. We value your privacy and do not share your personal information with third parties.
+This is the privacy policy of the Edu Mentor app. 
+We value your privacy and do not share your personal information with third parties.
 """);
               },
             ),
@@ -121,7 +134,8 @@ This is the privacy policy of the Edu Mentor app. We value your privacy and do n
               title: Text("Terms of Use"),
               onTap: () {
                 _showLegalDialog("Terms of Use", """
-By using this app, you agree to the terms and conditions set forth by Edu Mentor. Use the app responsibly.
+By using this app, you agree to the terms and conditions set forth by Edu Mentor. 
+Use the app responsibly.
 """);
               },
             ),

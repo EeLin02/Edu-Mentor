@@ -27,6 +27,9 @@ class ClassChatScreen extends StatefulWidget {
 
 class _ClassChatScreenState extends State<ClassChatScreen> {
   late Future<List<Map<String, String>>> _enrolledStudentsFuture;
+  List<Map<String, String>> _allStudents = [];
+  List<Map<String, String>> _filteredStudents = [];
+  String _searchQuery = "";
 
   @override
   void initState() {
@@ -37,7 +40,6 @@ class _ClassChatScreenState extends State<ClassChatScreen> {
   Future<List<Map<String, String>>> _fetchEnrolledStudents() async {
     final firestore = FirebaseFirestore.instance;
 
-    // Fetch enrollments directly — no mentor check needed
     final enrollmentSnap = await firestore
         .collection('subjectEnrollments')
         .where('subjectId', isEqualTo: widget.subjectId)
@@ -66,7 +68,24 @@ class _ClassChatScreenState extends State<ClassChatScreen> {
       }
     }
 
+    // Store results locally for searching
+    setState(() {
+      _allStudents = students;
+      _filteredStudents = students;
+    });
+
     return students;
+  }
+
+  void _filterStudents(String query) {
+    final lowerQuery = query.toLowerCase();
+    setState(() {
+      _searchQuery = query;
+      _filteredStudents = _allStudents.where((student) {
+        final name = student['name']?.toLowerCase() ?? '';
+        return name.contains(lowerQuery);
+      }).toList();
+    });
   }
 
   @override
@@ -84,7 +103,8 @@ class _ClassChatScreenState extends State<ClassChatScreen> {
       body: FutureBuilder<List<Map<String, String>>>(
         future: _enrolledStudentsFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              _allStudents.isEmpty) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -92,42 +112,65 @@ class _ClassChatScreenState extends State<ClassChatScreen> {
             return Center(child: Text('Error: ${snapshot.error}'));
           }
 
-          final students = snapshot.data ?? [];
-
-          if (students.isEmpty) {
+          if (_allStudents.isEmpty) {
             return const Center(child: Text("No students enrolled."));
           }
 
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: students.length,
-            separatorBuilder: (_, __) => const Divider(),
-            itemBuilder: (context, index) {
-              final student = students[index];
-              final name = student['name'] ?? 'Unnamed';
-              final profileUrl = student['profileUrl'] ?? '';
-              final studentId = student['id'] ?? '';
-
-              return ListTile(
-                leading: CircleAvatar(
-                  backgroundImage: profileUrl.isNotEmpty ? NetworkImage(profileUrl) : null,
-                  child: profileUrl.isEmpty ? const Icon(Icons.person) : null,
-                ),
-                title: Text(name),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => PrivateChatScreen(
-                        studentId: studentId,
-                        studentName: name,
-                        mentorId: widget.mentorId,
-                      ),
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: "Search students by name...",
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  );
-                },
-              );
-            },
+                  ),
+                  onChanged: _filterStudents,
+                ),
+              ),
+              Expanded(
+                child: _filteredStudents.isEmpty
+                    ? const Center(child: Text("No matching students found."))
+                    : ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _filteredStudents.length,
+                  separatorBuilder: (_, __) => const Divider(),
+                  itemBuilder: (context, index) {
+                    final student = _filteredStudents[index];
+                    final name = student['name'] ?? 'Unnamed';
+                    final profileUrl = student['profileUrl'] ?? '';
+                    final studentId = student['id'] ?? '';
+
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundImage: profileUrl.isNotEmpty
+                            ? NetworkImage(profileUrl)
+                            : null,
+                        child: profileUrl.isEmpty
+                            ? const Icon(Icons.person)
+                            : null,
+                      ),
+                      title: Text(name),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PrivateChatScreen(
+                              studentId: studentId,
+                              studentName: name,
+                              mentorId: widget.mentorId,
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
           );
         },
       ),

@@ -144,6 +144,7 @@ class _StudentSubjectClassDetailsScreenState
     final bool isLight = color.computeLuminance() > 0.5;
     final Color textColor = isLight ? Colors.black87 : Colors.white;
 
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -162,20 +163,29 @@ class _StudentSubjectClassDetailsScreenState
           children: [
             _infoCard(textColor),
             const SizedBox(height: 30),
-            _sectionTitle('Home Page', textColor),
+            _sectionTitle('Home Page',
+              Theme.of(context).textTheme.bodyMedium?.color ?? Colors.black,
+            ),
             const SizedBox(height: 14),
             _actionButton(
               icon: Icons.campaign_outlined,
               label: 'View Announcements',
               textColor: textColor,
               onTap: () {
-                Navigator.pushNamed(context, '/studentAnnouncement', arguments: {
-                  'subjectName': subjectName,
-                  'className': className,
-                  'color': color,
-                });
+                Navigator.pushNamed(
+                  context,
+                  '/studentAnnouncement',
+                  arguments: {
+                    'subjectId': widget.subjectId,
+                    'subjectName': subjectName,
+                    'classId': widget.classId,
+                    'className': className,
+                    'color': color,
+                  },
+                );
               },
             ),
+
             const SizedBox(height: 14),
             _actionButton(
               icon: Icons.chat_bubble_outline,
@@ -317,14 +327,18 @@ class _StudentSubjectClassDetailsScreenState
     );
   }
 
-  Widget _sectionTitle(String title, Color color) {
+  Widget _sectionTitle(String title, Color textColor) {
     return Row(
       children: [
-        Icon(Icons.playlist_add_check, color: color),
+        Icon(Icons.playlist_add_check, color: textColor),
         const SizedBox(width: 8),
         Text(
           title,
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: color),
+          style: TextStyle(
+            color: textColor, // was hardcoded Colors.black87
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
         ),
       ],
     );

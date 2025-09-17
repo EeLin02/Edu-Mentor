@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'create_announcement_screen.dart';
+
 class AnnouncementScreen extends StatefulWidget {
   const AnnouncementScreen({Key? key}) : super(key: key);
 
@@ -53,26 +55,34 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
   }
 
 
-  void _editAnnouncement(DocumentSnapshot doc, String subjectName, String className, Color color) {
-
+  void _editAnnouncement(
+      DocumentSnapshot doc,
+      String subjectId,
+      String subjectName,
+      String classId,
+      String className,
+      Color color,
+      ) {
     final data = doc.data() as Map<String, dynamic>;
-    print('External links: ${data['externalLinks']}');
 
     Navigator.pushNamed(
       context,
       '/createAnnouncement',
       arguments: {
+        'subjectId': subjectId,
         'subjectName': subjectName,
+        'classId': classId,
         'className': className,
         'announcementId': doc.id,
         'title': data['title'],
         'description': data['description'],
         'files': data['files'] ?? [],
-        'externalLinks': List<String>.from(data['externalLinks'] ?? []), // 👈 updated
+        'externalLinks': List<String>.from(data['externalLinks'] ?? []),
         'color': color,
       },
     );
   }
+
 
 
   @override
@@ -141,8 +151,27 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                       IconButton(
                         tooltip: 'Edit',
                         icon: Icon(Icons.edit, color: Colors.blueGrey),
-                        onPressed: () => _editAnnouncement(doc, subjectName, className, color),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CreateAnnouncementScreen(
+                                subjectId: args['subjectId'] ?? '',
+                                subjectName: subjectName,
+                                classId: args['classId'] ?? '',
+                                className: className,
+                                announcementId: doc.id,
+                                title: data['title'],
+                                description: data['description'],
+                                files: data['files'] ?? [],
+                                externalLinks: List<String>.from(data['externalLinks'] ?? []),
+                                color: color,
+                              ),
+                            ),
+                          );
+                        },
                       ),
+
                       IconButton(
                         tooltip: 'Delete',
                         icon: Icon(Icons.delete, color: Colors.redAccent),
@@ -172,7 +201,9 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
             context,
             '/createAnnouncement',
             arguments: {
+              'subjectId': args['subjectId'],
               'subjectName': subjectName,
+              'classId': args['classId'],
               'className': className,
               'color': color,
             },

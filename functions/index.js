@@ -1,20 +1,147 @@
-const functions = require('firebase-functions');
-const admin = require('firebase-admin');
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const admin = require("firebase-admin");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+
 admin.initializeApp();
 
-exports.setAccountDisabled = functions.https.onCall(async (data, context) => {
-  // Check if the user has the admin claim
-  if (!(context.auth && context.auth.token.admin)) {
-    throw new functions.https.HttpsError('permission-denied', 'Only admins can modify users.');
+// Callable function: disable/enable account
+exports.setAccountDisabled = onCall(async (request) => {
+  const { data, auth } = request;
+
+  if (!(auth && auth.token && auth.token.admin)) {
+    throw new HttpsError("permission-denied", "Only admins can modify users.");
   }
 
-  const uid = data.uid;
-  const disabled = data.disabled;
-
   try {
-    await admin.auth().updateUser(uid, { disabled });
-    return { message: `User ${uid} has been ${disabled ? 'disabled' : 'enabled'}.` };
+    await admin.auth().updateUser(data.uid, { disabled: data.disabled });
+    return {
+      message: `User ${data.uid} has been ${data.disabled ? "disabled" : "enabled"}.`,
+    };
   } catch (error) {
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new HttpsError("internal", error.message);
+  }
+});
+
+// Scheduled function: check SLA every 60 minutes
+exports.checkSlaEveryHour = onSchedule("every 60 minutes", async (event) => {
+  const now = admin.firestore.Timestamp.now();
+  const cutoffMillis = Date.now() - 48 * 60 * 60 * 1000; // 48 hours ago
+  const cutoffTimestamp = admin.firestore.Timestamp.fromMillis(cutoffMillis);
+
+  const db = admin.firestore();
+  const qSnapshot = await db
+    .collectionGroup("messages")
+    .where("senderRole", "==", "student")
+    .where("slaNotified", "==", false)
+    .where("timestamp", "<=", cutoffTimestamp)
+    .limit(500)
+    .get();
+
+  if (qSnapshot.empty) {
+    console.log("No candidate messages for SLA check.");
+    return null;
+  }
+
+  for (const msgDoc of qSnapshot.docs) {
+    try {
+      const data = msgDoc.data();
+      const studentTs = data.timestamp;
+      const mentorId = data.mentorId;
+      const studentId = data.studentId;
+
+      if (!studentTs || !mentorId || !studentId) {
+        console.warn("Skipping message missing metadata:", msgDoc.id);
+        continue;
+      }
+
+      // check if mentor replied after studentTs
+      const messagesCollectionRef = msgDoc.ref.parent;
+      const replySnap = await messagesCollectionRef
+        .where("senderId", "==", mentorId)
+        .where("timestamp", ">", studentTs)
+        .limit(1)
+        .get();
+
+      if (!replySnap.empty) continue;
+
+      const mentorDoc = await db.collection("mentors").doc(mentorId).get();
+      if (!mentorDoc.exists) {
+        console.warn("Mentor doc not found for id", mentorId);
+        continue;
+      }
+
+      const mentorData = mentorDoc.data();
+      let tokens = [];
+      if (Array.isArray(mentorData?.fcmTokens)) {
+        tokens = mentorData.fcmTokens;
+      } else if (mentorData?.fcmToken) {
+        tokens = [mentorData.fcmToken];
+      }
+
+      if (tokens.length > 0) {
+        const text = (data.text ?? "Attachment").toString();
+        const short = text.length > 120 ? text.substring(0, 117) + "..." : text;
+
+        const message = {
+          tokens,
+          notification: {
+            title: "SLA Alert — Unanswered Student Message",
+            body: "A student message has gone unanswered for over 48 hours: " + short,
+          },
+          data: {
+            chatId: msgDoc.ref.parent.parent?.id ?? "",
+            messageId: msgDoc.id,
+            mentorId,
+            studentId,
+          },
+        };
+
+        const response = await admin.messaging().sendMulticast(message);
+        console.log("FCM send response:", response);
+      }
+
+      await msgDoc.ref.update({ slaNotified: true });
+
+      await db.collection("slaBreaches").add({
+        chatId: msgDoc.ref.parent.parent?.id ?? "",
+        messageId: msgDoc.id,
+        mentorId,
+        studentId,
+        messageText: data.text ?? null,
+        messageTimestamp: studentTs,
+        detectedAt: admin.firestore.Timestamp.now(),
+      });
+    } catch (err) {
+      console.error("Error handling SLA for msg", msgDoc.id, err);
+    }
+  }
+
+  return null;
+});
+
+exports.sendAnnouncementNotification = onDocumentCreated("announcements/{announcementId}", async (event) => {
+  const data = event.data.data();
+
+  const title = data.title || "New Announcement";
+  const body = `${data.subjectName} - ${data.className}`;
+
+  // You would store FCM tokens under each student’s user doc
+  const tokensSnap = await admin.firestore()
+    .collection("students")
+    .where("className", "==", data.className)
+    .where("subjectName", "==", data.subjectName)
+    .get();
+
+  const tokens = tokensSnap.docs
+    .map(doc => doc.data().fcmToken)
+    .filter(token => !!token);
+
+  if (tokens.length > 0) {
+    await admin.messaging().sendEachForMulticast({
+      tokens,
+      notification: { title, body },
+      data: { subjectName: data.subjectName, className: data.className }
+    });
   }
 });

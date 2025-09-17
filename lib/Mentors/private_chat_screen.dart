@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:intl/intl.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/foundation.dart';
@@ -56,6 +57,8 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
         .doc(widget.studentId)
         .snapshots();
 
+    _requestPermission();
+
   }
 
   String get chatId {
@@ -75,11 +78,28 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
     await messageCollection.add({
       'text': text,
       'senderId': widget.mentorId,
+      'senderRole': "mentor",     //  mark role
+      'mentorId': widget.mentorId,
+      'studentId': widget.studentId,
       'timestamp': FieldValue.serverTimestamp(),
+      'slaNotified': false,       // optional
     });
 
     _messageController.clear();
   }
+
+  void _requestPermission() async {
+    FirebaseMessaging messaging = FirebaseMessaging.instance;
+
+    NotificationSettings settings = await messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
+    print('User granted permission: ${settings.authorizationStatus}');
+  }
+
 
   void _deleteMessage(String messageId) {
     messageCollection.doc(messageId).delete();
@@ -550,7 +570,11 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
           'fileName': fileName,
           'fileType': mimeType,
           'senderId': widget.mentorId,
+          'senderRole': "mentor",      // mark role
+          'mentorId': widget.mentorId,
+          'studentId': widget.studentId,
           'timestamp': FieldValue.serverTimestamp(),
+          'slaNotified': false,        // optional
         });
 
       } catch (e) {
