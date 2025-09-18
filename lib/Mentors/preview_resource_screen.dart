@@ -32,6 +32,7 @@ class _PreviewResourceScreenState extends State<PreviewResourceScreen> {
     _mentorDetailsFuture = _fetchMentorDetails();
   }
 
+
   Future<List<Map<String, dynamic>>> _fetchMentorDetails() async {
     final firestore = FirebaseFirestore.instance;
     final mentorsId = widget.data['mentorsId'] as String?;
@@ -161,16 +162,9 @@ class _ModernResourceCard extends StatelessWidget {
                       style: const TextStyle(color: Colors.deepPurple),
                     ),
                     backgroundColor: Colors.grey.shade100,
-                    onPressed: () async {
-                      final uri = Uri.parse(link.toString());
-                      if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri, mode: LaunchMode.externalApplication);
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Could not open link')),
-                        );
-                      }
-                    },
+                    onPressed: ()  {
+                      _openLink(context, link.toString());
+                    }
                   );
                 }).toList(),
               ),
@@ -227,6 +221,24 @@ class _ModernResourceCard extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _openLink(BuildContext context, String url) async {
+    String rawLink = url.trim();
+    if (!rawLink.startsWith('http://') && !rawLink.startsWith('https://')) {
+      rawLink = 'https://$rawLink';
+    }
+
+    final uri = Uri.parse(rawLink);
+
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open link: $rawLink')),
+      );
+    }
+  }
+
 
   Future<void> _downloadFile(BuildContext context, String url, String filename) async {
     final status = await _checkPermission();

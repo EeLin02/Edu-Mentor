@@ -66,6 +66,10 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final appBarColor = widget.color ?? Colors.teal;
+    final isLight = appBarColor.computeLuminance() > 0.5;
+    final textColor = isLight ? Colors.black87 : Colors.white;
+
     final attendanceRef = FirebaseFirestore.instance
         .collection('attendance')
         .doc(widget.classId)
@@ -74,7 +78,8 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text("Attendance · ${widget.subjectName} - ${widget.className}"),
-        backgroundColor: widget.color,
+        backgroundColor: appBarColor,
+        foregroundColor: textColor,
       ),
       body: Column(
         children: [
@@ -167,9 +172,9 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                       data = doc.data() as Map<String, dynamic>;
                     } catch (_) {}
 
-                    final presentCount =
-                        data.values.where((v) => v == true).length;
-                    final absentCount = data.length - presentCount;
+                    final presentCount = data.values.where((v) => v == true).length;
+                    final mcCount = data.values.where((v) => v == "MC").length;
+                    final absentCount = data.length - presentCount - mcCount;
 
                     return Card(
                       margin:
@@ -183,8 +188,8 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                               .format(DateTime.parse(dateStr)),
                         ),
                         subtitle:
-                        Text("Present: $presentCount | Absent: $absentCount"),
-                        trailing: IconButton(
+                        Text("Present: $presentCount | Absent: $absentCount | MC: $mcCount"),
+                          trailing: IconButton(
                           icon: const Icon(Icons.delete, color: Colors.redAccent),
                           onPressed: () async {
                             final confirm = await showDialog<bool>(

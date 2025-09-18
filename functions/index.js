@@ -23,6 +23,7 @@ exports.setAccountDisabled = onCall(async (request) => {
   }
 });
 
+
 // Scheduled function: check SLA every 60 minutes
 exports.checkSlaEveryHour = onSchedule("every 60 minutes", async (event) => {
   const now = admin.firestore.Timestamp.now();
@@ -64,6 +65,15 @@ exports.checkSlaEveryHour = onSchedule("every 60 minutes", async (event) => {
         .get();
 
       if (!replySnap.empty) continue;
+
+       // NEW: Check mute
+        const ids = [mentorId, studentId].sort();
+        const chatId = ids.join("_");
+        const muteDoc = await db.collection("mutedChats").doc(chatId).get();
+        if (muteDoc.exists) {
+          console.log(`Chat ${chatId} is muted, skip SLA notification.`);
+          continue;
+        }
 
       const mentorDoc = await db.collection("mentors").doc(mentorId).get();
       if (!mentorDoc.exists) {

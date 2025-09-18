@@ -77,15 +77,9 @@ class _CreateResourceScreenState extends State<CreateResourceScreen> {
         _titleController.text = data['title'] ?? '';
         _descriptionController.text = data['description'] ?? '';
 
-        final links = List<String>.from(data['links'] ?? []);
-        // Assuming uploaded file URLs contain 'firebaseapp.com' or something unique, you can adjust this logic:
-        _uploadedFileUrls = links.where((link) => link.startsWith('http')).toList();
-
-        // If you want to separate external links (like website URLs) you could refine this further
-        _externalLinks = [];  // clear and fill with external links if needed, or
-        // For now, to keep simple, treat all as uploaded files or external links as is:
-        // For example, treat links that don't start with http as external (or any other logic)
-        // _externalLinks = links.where((link) => !link.startsWith('http')).toList();
+        // Load saved files & external links
+        _uploadedFileUrls = List<String>.from(data['files'] ?? []);
+        _externalLinks = List<String>.from(data['externalLinks'] ?? []);
 
         _selectedCategory = data['category'];
       });
@@ -276,7 +270,8 @@ class _CreateResourceScreenState extends State<CreateResourceScreen> {
         'title': title,
         'description': _descriptionController.text.trim(),
         'category': category,
-        'links': [..._uploadedFileUrls, ...fileUrls, ..._externalLinks],  // merge all links
+        'files': [..._uploadedFileUrls, ...fileUrls],
+        'externalLinks': _externalLinks,
         'timestamp': FieldValue.serverTimestamp(),
         'mentorsId': uid,
       };
@@ -592,19 +587,23 @@ class _CreateResourceScreenState extends State<CreateResourceScreen> {
                   Wrap(
                     spacing: 8,
                     runSpacing: 4,
-                    children: _uploadedFileUrls.map((url) => Chip(
-                      label: Text(
-                        url.split('/').last, // show file name from URL (or parse better if you want)
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      deleteIcon: Icon(Icons.close),
-                      onDeleted: () {
-                        setState(() {
-                          _uploadedFileUrls.remove(url);
-                        });
-                      },
-                    )).toList(),
+                    children: _uploadedFileUrls.map((url) {
+                      final fileName = Uri.decodeFull(url.split('/').last.split('?').first);
+                      return Chip(
+                        label: Text(
+                          fileName,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        deleteIcon: const Icon(Icons.close),
+                        onDeleted: () {
+                          setState(() {
+                            _uploadedFileUrls.remove(url);
+                          });
+                        },
+                      );
+                    }).toList(),
                   ),
+
 
               ],
             ),

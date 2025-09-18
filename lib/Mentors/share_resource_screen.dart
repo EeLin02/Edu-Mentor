@@ -15,18 +15,20 @@ class _ResourceScreenState extends State<ResourceScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text('Delete Resource'),
-        content: Text('Are you sure you want to delete this resource?'),
+        title: const Text('Delete Resource'),
+        content: const Text('Are you sure you want to delete this resource?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: Text('Delete')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
         ],
       ),
     );
 
     if (confirm == true) {
       await _resourcesCollection.doc(docId).delete();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Resource deleted')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Resource deleted')),
+      );
     }
   }
 
@@ -41,7 +43,7 @@ class _ResourceScreenState extends State<ResourceScreen> {
         'className': className,
         'resourceId': doc.id,
         'title': data['title'],
-        'description' :data['description'],
+        'description': data['description'],
         'category': data['category'],
         'links': List<String>.from(data['links'] ?? []),
         'color': color,
@@ -51,7 +53,6 @@ class _ResourceScreenState extends State<ResourceScreen> {
 
   String _formatTimestamp(Timestamp timestamp) {
     final date = timestamp.toDate();
-    // Example format: "Jun 11, 2025 14:32"
     return "${_monthString(date.month)} ${date.day}, ${date.year} ${_twoDigits(date.hour)}:${_twoDigits(date.minute)}";
   }
 
@@ -63,9 +64,7 @@ class _ResourceScreenState extends State<ResourceScreen> {
     return months[month];
   }
 
-  String _twoDigits(int n) {
-    return n.toString().padLeft(2, '0');
-  }
+  String _twoDigits(int n) => n.toString().padLeft(2, '0');
 
   @override
   Widget build(BuildContext context) {
@@ -74,7 +73,6 @@ class _ResourceScreenState extends State<ResourceScreen> {
     final String className = args['className'];
     final Color color = args['color'] ?? Colors.indigo;
 
-    // Dynamic text color based on background color brightness
     final bool isLight = color.computeLuminance() > 0.5;
     final Color textColor = isLight ? Colors.black87 : Colors.white;
 
@@ -91,63 +89,65 @@ class _ResourceScreenState extends State<ResourceScreen> {
             .orderBy('category')
             .snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: Text('Error loading resources'));
-          }
-          if (!snapshot.hasData) {
-            return Center(child: CircularProgressIndicator());
-          }
+          if (snapshot.hasError) return const Center(child: Text('Error loading resources'));
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
           final docs = snapshot.data!.docs;
           if (docs.isEmpty) {
-            return Center(child: Text('No resources available.'));
+            return const Center(child: Text('No resources available.'));
           }
 
           // Group resources by category
-          final Map<String, List<QueryDocumentSnapshot>> categorizedResources = {};
+          final Map<String, List<QueryDocumentSnapshot>> grouped = {};
           for (var doc in docs) {
             final data = doc.data()! as Map<String, dynamic>;
             final category = data['category'] ?? 'Uncategorized';
-            categorizedResources.putIfAbsent(category, () => []).add(doc);
+            grouped.putIfAbsent(category, () => []);
+            grouped[category]!.add(doc);
           }
 
           return ListView(
-            padding: const EdgeInsets.all(16),
-            children: categorizedResources.entries.map((entry) {
+            padding: const EdgeInsets.all(12),
+            children: grouped.entries.map((entry) {
               final category = entry.key;
               final resources = entry.value;
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    category,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                      color: textColor,
-                    ),
+              return Card(
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 3,
+                child: ExpansionTile(
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  childrenPadding: const EdgeInsets.only(bottom: 12),
+                  backgroundColor: Colors.grey[50],
+                  collapsedBackgroundColor: Colors.grey[100],
+                  title: Row(
+                    children: [
+                      const Icon(Icons.category, color: Colors.teal),
+                      const SizedBox(width: 8),
+                      Text(
+                        category,
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  ...resources.map((doc) {
+                  children: resources.map((doc) {
                     final data = doc.data()! as Map<String, dynamic>;
                     final title = data['title'] ?? 'Untitled Resource';
 
                     return Card(
-                      elevation: 2,
-                      margin: const EdgeInsets.symmetric(vertical: 6),
+                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        leading: Icon(Icons.library_books, color: Colors.teal[300], size: 32),
+                        leading: const Icon(Icons.library_books, color: Colors.blueGrey),
                         title: Text(
-                          data['title'] ?? 'No Title',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          title,
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                         ),
                         subtitle: data['timestamp'] != null
                             ? Text(
                           'Posted on ${_formatTimestamp(data['timestamp'])}',
-                          style: TextStyle(color: Colors.grey[600]),
+                          style: const TextStyle(fontSize: 13, color: Colors.black54),
                         )
                             : null,
                         trailing: Row(
@@ -155,12 +155,12 @@ class _ResourceScreenState extends State<ResourceScreen> {
                           children: [
                             IconButton(
                               tooltip: 'Edit',
-                              icon: Icon(Icons.edit, color: Colors.blueGrey),
+                              icon: const Icon(Icons.edit, color: Colors.blueGrey),
                               onPressed: () => _editResource(doc, subjectName, className, color),
                             ),
                             IconButton(
                               tooltip: 'Delete',
-                              icon: Icon(Icons.delete, color: Colors.redAccent),
+                              icon: const Icon(Icons.delete, color: Colors.redAccent),
                               onPressed: () => _deleteResource(doc.id),
                             ),
                           ],
@@ -169,14 +169,13 @@ class _ResourceScreenState extends State<ResourceScreen> {
                           Navigator.pushNamed(
                             context,
                             '/PreviewResourceScreen',
-                            arguments: {'docid': doc.id, 'data': data,'color': color,},
+                            arguments: {'docid': doc.id, 'data': data, 'color': color},
                           );
                         },
                       ),
                     );
                   }).toList(),
-                  const SizedBox(height: 16),
-                ],
+                ),
               );
             }).toList(),
           );
@@ -196,7 +195,7 @@ class _ResourceScreenState extends State<ResourceScreen> {
             },
           );
         },
-        child: Icon(Icons.add),
+        child: const Icon(Icons.add),
         tooltip: 'Add new resource',
       ),
     );

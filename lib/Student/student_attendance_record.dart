@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class StudentAttendanceRecordsScreen extends StatefulWidget {
   final String classId;
   final String subjectId;
-  final String studentId; // student UID
+  final String studentId;
   final Color color;
 
   const StudentAttendanceRecordsScreen({
@@ -26,6 +26,10 @@ class _StudentAttendanceRecordsScreenState
   List<Map<String, dynamic>> attendanceList = [];
   bool isLoading = true;
 
+  int presentCount = 0;
+  int absentCount = 0;
+  int mcCount = 0;
+
   @override
   void initState() {
     super.initState();
@@ -40,33 +44,42 @@ class _StudentAttendanceRecordsScreenState
         .get();
 
     int totalSessions = 0;
-    int presentCount = 0;
+    int present = 0;
+    int absent = 0;
+    int mc = 0;
+
     List<Map<String, dynamic>> tempList = [];
 
     for (var doc in snapshot.docs) {
       final data = doc.data();
-
-      // Extract date from doc ID if no date field exists
       final date = data['date'] ?? doc.id;
 
-      // If this doc has the student's record
       if (data.containsKey(widget.studentId)) {
         totalSessions++;
-        final status = data[widget.studentId] == true ? "Present" : "Absent";
-        if (status == "Present") presentCount++;
+        String status;
 
-        tempList.add({
-          "date": date,
-          "status": status,
-        });
+        if (data[widget.studentId] == true) {
+          status = "Present";
+          present++;
+        } else if (data[widget.studentId] == "MC") {
+          status = "MC";
+          mc++;
+        } else {
+          status = "Absent";
+          absent++;
+        }
+
+        tempList.add({"date": date, "status": status});
       }
     }
 
     setState(() {
       attendanceList = tempList;
-      attendanceRate = totalSessions > 0
-          ? (presentCount / totalSessions) * 100
-          : 0.0;
+      presentCount = present;
+      absentCount = absent;
+      mcCount = mc;
+      attendanceRate =
+      totalSessions > 0 ? (present / totalSessions) * 100 : 0.0;
       isLoading = false;
     });
   }
@@ -90,6 +103,7 @@ class _StudentAttendanceRecordsScreenState
           : Column(
         children: [
           const SizedBox(height: 20),
+
           // Attendance Percentage Circle
           Center(
             child: Stack(
@@ -129,6 +143,21 @@ class _StudentAttendanceRecordsScreenState
           ),
           const SizedBox(height: 20),
 
+          // Summary counts
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildSummaryCard("Present", presentCount, Colors.green),
+                _buildSummaryCard("Absent", absentCount, Colors.red),
+                _buildSummaryCard("MC", mcCount, Colors.orange),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
           // Attendance Table
           Expanded(
             child: SingleChildScrollView(
@@ -150,9 +179,13 @@ class _StudentAttendanceRecordsScreenState
                           Icon(
                             status == "Present"
                                 ? Icons.check_circle
+                                : status == "MC"
+                                ? Icons.medical_services
                                 : Icons.cancel,
                             color: status == "Present"
                                 ? Colors.green
+                                : status == "MC"
+                                ? Colors.orange
                                 : Colors.red,
                             size: 18,
                           ),
@@ -162,6 +195,8 @@ class _StudentAttendanceRecordsScreenState
                             style: TextStyle(
                               color: status == "Present"
                                   ? Colors.green
+                                  : status == "MC"
+                                  ? Colors.orange
                                   : Colors.red,
                               fontWeight: FontWeight.bold,
                             ),
@@ -175,6 +210,37 @@ class _StudentAttendanceRecordsScreenState
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryCard(String label, int count, Color color) {
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+        child: Column(
+          children: [
+            Text(
+              count.toString(),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

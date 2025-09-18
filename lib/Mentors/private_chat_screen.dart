@@ -40,6 +40,8 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
   bool _isSearching = false;
   String searchQuery = '';
   bool _isOnline = false;
+  bool _isMuted = false;
+  Timestamp? _lastClearedAt;
 
 
   @override
@@ -57,6 +59,21 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
         .doc(widget.studentId)
         .snapshots();
 
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    FirebaseFirestore.instance
+        .collection('privateChats')
+        .doc(chatId)
+        .collection('userStates')
+        .doc(uid)
+        .get()
+        .then((doc) {
+      setState(() {
+        _lastClearedAt = doc.data()?['lastClearedAt'];
+      });
+    });
+
+    _checkMuteStatus(chatId); //check mute on startup;
+
     _requestPermission();
 
   }
@@ -70,6 +87,21 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
       .collection('privateChats')
       .doc(chatId)
       .collection('messages');
+
+  Future<void> _checkMuteStatus(String chatId) async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('mutedChats')
+        .doc(chatId)
+        .get();
+
+    setState(() {
+      _isMuted = doc.exists;
+    });
+  }
 
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
@@ -100,9 +132,32 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
     print('User granted permission: ${settings.authorizationStatus}');
   }
 
+  Future<void> deleteForMe(String chatId, String messageId) async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    await FirebaseFirestore.instance
+        .collection('privateChats')
+        .doc(chatId)
+        .collection('messages')
+        .doc(messageId)
+        .update({
+      'deletedBy': FieldValue.arrayUnion([uid]),
+    });
+  }
 
-  void _deleteMessage(String messageId) {
-    messageCollection.doc(messageId).delete();
+  Future<void> deleteForEveryone(String chatId, String messageId, String senderId) async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    if (uid != senderId) {
+      throw Exception("Only sender can delete for everyone");
+    }
+
+    await FirebaseFirestore.instance
+        .collection('privateChats')
+        .doc(chatId)
+        .collection('messages')
+        .doc(messageId)
+        .update({
+      'deletedForEveryone': true,
+    });
   }
 
   String _formatTimestamp(Timestamp timestamp) {
@@ -190,10 +245,13 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
         _showSearchDialog();
         break;
       case 'clear':
-        _confirmClearChat();
+        _clearChatHistory();
         break;
       case 'toggleOnline':
-        _showToggleOnlineDialog();  // <-- add this line
+        _showToggleOnlineDialog();
+        break;
+      case 'toggleMute':
+        _toggleMuteNotifications(chatId);
         break;
     }
   }
@@ -306,38 +364,73 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
     }
   }
 
+  Future<void> _toggleMuteNotifications(String chatId) async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
 
-  void _confirmClearChat() {
-    showDialog(
+    final docRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('mutedChats')
+        .doc(chatId);
+
+    if (_isMuted) {
+      // Unmute (remove entry)
+      await docRef.delete();
+    } else {
+      // Mute (add entry)
+      await docRef.set({
+        'mutedAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    setState(() {
+      _isMuted = !_isMuted;
+    });
+  }
+
+  Future<void> _clearChatHistory() async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    // Show confirmation dialog first
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Clear Chat History"),
-        content: const Text("Are you sure you want to delete all messages?"),
+        content: const Text("This will clear the chat history only on your side. Continue?"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
           TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              final batch = FirebaseFirestore.instance.batch();
-              final snapshot = await messageCollection.get();
-              for (var doc in snapshot.docs) {
-                batch.delete(doc.reference);
-              }
-              await batch.commit();
-              setState(() {
-                _isSearching = false;
-                _filteredMessages.clear();
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Chat history cleared")),
-              );
-            },
-            child: const Text("Delete All", style: TextStyle(color: Colors.red)),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text("Clear"),
           ),
         ],
       ),
     );
+
+    if (confirm != true) return; // user cancelled
+
+    // Apply deletion marker (soft delete only for this user)
+    final snapshot = await messageCollection.get();
+    final batch = FirebaseFirestore.instance.batch();
+
+    for (var doc in snapshot.docs) {
+      batch.update(doc.reference, {
+        "deletedBy": FieldValue.arrayUnion([uid])
+      });
+    }
+
+    await batch.commit();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Chat history cleared (only for you)")),
+    );
   }
+
+
 
   void _updateOnlineStatus(bool isOnline) {
     final mentorId = FirebaseAuth.instance.currentUser!.uid;
@@ -356,15 +449,28 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(58),
         child: AppBar(
-          backgroundColor: const Color(0xff075E54),
+          backgroundColor: Colors.teal,
           titleSpacing: 0,
           title: Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Row(
               children: [
-                const CircleAvatar(
-                  backgroundImage: AssetImage('assets/avatar.png'),
-                  radius: 18,
+                StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance
+                      .collection('students')
+                      .doc(widget.studentId)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    final data = snapshot.data?.data();
+                    final photoUrl = data?['profileUrl'];
+
+                    return CircleAvatar(
+                      radius: 18,
+                      backgroundImage: photoUrl != null && photoUrl.isNotEmpty
+                          ? NetworkImage(photoUrl)
+                          : const AssetImage('assets/student_icon.png') as ImageProvider,
+                    );
+                  },
                 ),
                 const SizedBox(width: 8),
                 StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
@@ -383,11 +489,19 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
                     );
                   },
                 ),
-
               ],
             ),
           ),
           actions: [
+            IconButton(
+              icon: Icon(
+                _isMuted ? Icons.notifications_off : Icons.notifications,
+                color: Colors.white,
+              ),
+              tooltip: _isMuted ? 'Unmute Notifications' : 'Mute Notifications',
+              onPressed: () => _toggleMuteNotifications(chatId),
+              // same toggle function
+            ),
             PopupMenuButton<String>(
               icon: Icon(Icons.more_vert, color: Colors.white),
               onSelected: _handleMenuAction,
@@ -413,6 +527,10 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
                 const PopupMenuItem(
                   value: 'toggleOnline',
                   child: Text('Set Online Status'),
+                ),
+                PopupMenuItem(
+                  value: 'toggleMute',
+                  child: Text(_isMuted ? 'Unmute Notifications' : 'Mute Notifications'),
                 ),
               ],
 
@@ -453,7 +571,9 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
                       searchQuery = '';
                     }),
                     child: const Chip(
-                      label: Text("Clear"),
+                      label: Text("Clear",
+                        style: const TextStyle(color: Colors.white), // make text white
+                      ),
                       backgroundColor: Colors.redAccent,
                       labelStyle: TextStyle(color: Colors.white),
                     ),
@@ -471,74 +591,107 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
+                final uid = FirebaseAuth.instance.currentUser!.uid;
                 final messages = snapshot.data!.docs;
+
                 _allMessages = messages;
-                final displayMessages = _isSearching ? _filteredMessages : _allMessages;
 
-                return ListView.builder(
-                  padding: const EdgeInsets.all(10),
-                  itemCount: displayMessages.length,
-                  itemBuilder: (context, index) {
-                    final doc = displayMessages[index];
-                    final msg = doc.data() as Map<String, dynamic>;
-                    final isMe = msg['senderId'] == widget.mentorId;
+                // 🔹 Apply "delete for me" filter
+                var filtered = messages.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final deletedBy = List<String>.from(data['deletedBy'] ?? []);
+                  return !deletedBy.contains(uid);
+                }).toList();
 
-                    return GestureDetector(
-                      onLongPress: isMe
-                          ? () => _showDeleteDialog(doc.id)
-                          : null,
-                      child: Align(
-                        alignment: isMe
-                            ? Alignment.centerRight
-                            : Alignment.centerLeft,
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(
-                              vertical: 4, horizontal: 8),
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 10, horizontal: 14),
-                          constraints: BoxConstraints(
-                              maxWidth:
-                              MediaQuery.of(context).size.width * 0.7),
-                          decoration: BoxDecoration(
-                            color: isMe
-                                ? const Color(0xffDCF8C6)
-                                : Colors.white,
-                            borderRadius: BorderRadius.only(
-                              topLeft:
-                              const Radius.circular(12),
-                              topRight:
-                              const Radius.circular(12),
-                              bottomLeft: Radius.circular(isMe ? 12 : 0),
-                              bottomRight: Radius.circular(isMe ? 0 : 12),
+                // 🔹 Apply "clear history for me" filter
+                final displayMessages = filtered.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final ts = data['timestamp'] as Timestamp?;
+                  if (_lastClearedAt != null && ts != null) {
+                    return ts.compareTo(_lastClearedAt!) > 0;
+                  }
+                  return true;
+                }).toList();
+
+                // 🔹 Now use displayMessages
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(10),
+                      itemCount: displayMessages.length,
+                      itemBuilder: (context, index) {
+                        final doc = displayMessages[index];
+                        final msg = doc.data() as Map<String, dynamic>;
+                        final isMe = msg['senderId'] == widget.mentorId;
+
+                        if (msg['deletedForEveryone'] == true) {
+                          return Align(
+                            alignment: isMe
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(
+                                  vertical: 4, horizontal: 8),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                "This message was deleted",
+                                style: TextStyle(
+                                  fontStyle: FontStyle.italic,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+
+                        return GestureDetector(
+                          onLongPress: isMe
+                              ? () => _showDeleteDialog(doc.id, msg['senderId'])
+                              : null,
+                          child: Align(
+                            alignment: isMe
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(
+                                  vertical: 4, horizontal: 8),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 10, horizontal: 14),
+                              decoration: BoxDecoration(
+                                color: isMe
+                                    ? const Color(0xffDCF8C6)
+                                    : Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  if (msg['fileUrl'] != null) _buildFileMessage(msg),
+                                  if (msg['text'] != null &&
+                                      msg['text'].toString().isNotEmpty)
+                                    Text(msg['text'],
+                                        style: const TextStyle(fontSize: 16)),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    msg['timestamp'] != null
+                                        ? _formatTimestamp(msg['timestamp'] as Timestamp)
+                                        : 'Sending...',
+                                    style: const TextStyle(
+                                        fontSize: 10, color: Colors.grey),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              if (msg['fileUrl'] != null)
-                                _buildFileMessage(msg),
-                              if (msg['text'] != null && msg['text'].toString().isNotEmpty)
-                                Text(
-                                  msg['text'],
-                                  style: const TextStyle(fontSize: 16),
-                                ),
-                              const SizedBox(height: 4),
-                              Text(
-                                msg['timestamp'] != null
-                                    ? _formatTimestamp(msg['timestamp'] as Timestamp)
-                                    : 'Sending...',
-                                style: const TextStyle(fontSize: 10, color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                        );
+                      },
                     );
                   },
-                );
-              },
             ),
           ),
+
           const Divider(height: 1),
           _buildChatInput(),
         ],
@@ -663,22 +816,40 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
     );
   }
 
-  void _showDeleteDialog(String messageId) {
+  void _showDeleteDialog(String messageId, String senderId) {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final isSender = uid == senderId;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Delete Message"),
         content: const Text("Do you want to delete this message?"),
         actions: [
+          //Delete for me (always available)
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel")),
-          TextButton(
-            onPressed: () {
+            onPressed: () async {
+              await messageCollection.doc(messageId).update({
+                "deletedBy": FieldValue.arrayUnion([uid])
+              });
               Navigator.pop(context);
-              _deleteMessage(messageId);
             },
-            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+            child: const Text("Delete for me"),
+          ),
+          //  Delete for everyone (only sender can do this)
+          if (isSender)
+            TextButton(
+              onPressed: () async {
+                await messageCollection.doc(messageId).update({
+                  "deletedForEveryone": true,
+                });
+                Navigator.pop(context);
+              },
+              child: const Text("Delete for everyone"),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
           ),
         ],
       ),

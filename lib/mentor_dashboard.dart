@@ -355,7 +355,10 @@ class _MentorDashboardState extends State<MentorDashboard> {
       appBar: AppBar(
         title: Text('Mentor Dashboard'),
         backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
         elevation: 4,
+
+        iconTheme: const IconThemeData(color: Colors.white), //menu icon white color
       ),
       body: isLoading
           ? Center(child: CircularProgressIndicator())

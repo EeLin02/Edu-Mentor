@@ -16,12 +16,15 @@ class _StudentResourceScreenState extends State<StudentResourceScreen> {
 
   String _formatTimestamp(Timestamp timestamp) {
     final date = timestamp.toDate();
-    return "${_monthString(date.month)} ${date.day}, ${date.year} ${_twoDigits(date.hour)}:${_twoDigits(date.minute)}";
+    return "${_monthString(date.month)} ${date.day}, ${date.year} "
+        "${_twoDigits(date.hour)}:${_twoDigits(date.minute)}";
   }
 
   String _monthString(int month) {
-    const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = [
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
     return months[month];
   }
 
@@ -49,7 +52,7 @@ class _StudentResourceScreenState extends State<StudentResourceScreen> {
       });
     }
 
-    setState(() {}); // Refresh
+    setState(() {}); // Refresh UI
   }
 
   Future<bool> _isBookmarked(String resourceId) async {
@@ -76,7 +79,8 @@ class _StudentResourceScreenState extends State<StudentResourceScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Resources · $subjectName - $className', style: TextStyle(color: textColor)),
+        title: Text('Resources · $subjectName - $className',
+            style: TextStyle(color: textColor)),
         backgroundColor: color,
         foregroundColor: textColor,
       ),
@@ -93,28 +97,40 @@ class _StudentResourceScreenState extends State<StudentResourceScreen> {
           final docs = snapshot.data!.docs;
           if (docs.isEmpty) return const Center(child: Text('No resources available.'));
 
-          final Map<String, List<QueryDocumentSnapshot>> categorizedResources = {};
+          // Group resources by category
+          final Map<String, List<QueryDocumentSnapshot>> grouped = {};
           for (var doc in docs) {
             final data = doc.data()! as Map<String, dynamic>;
             final category = data['category'] ?? 'Uncategorized';
-            categorizedResources.putIfAbsent(category, () => []).add(doc);
+            grouped.putIfAbsent(category, () => []);
+            grouped[category]!.add(doc);
           }
 
           return ListView(
-            padding: const EdgeInsets.all(16),
-            children: categorizedResources.entries.map((entry) {
+            padding: const EdgeInsets.all(12),
+            children: grouped.entries.map((entry) {
               final category = entry.key;
               final resources = entry.value;
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    category,
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor),
+              return Card(
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 3,
+                child: ExpansionTile(
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  childrenPadding: const EdgeInsets.only(bottom: 12),
+                  backgroundColor: Colors.grey[50],
+                  collapsedBackgroundColor: Colors.grey[100],
+                  title: Row(
+                    children: [
+                      const Icon(Icons.category, color: Colors.teal),
+                      const SizedBox(width: 8),
+                      Text(category,
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold)),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  ...resources.map((doc) {
+                  children: resources.map((doc) {
                     final data = doc.data()! as Map<String, dynamic>;
 
                     return FutureBuilder<bool>(
@@ -123,20 +139,22 @@ class _StudentResourceScreenState extends State<StudentResourceScreen> {
                         final isBookmarked = bookmarkSnapshot.data ?? false;
 
                         return Card(
-                          elevation: 2,
-                          margin: const EdgeInsets.symmetric(vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
                           child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            leading: Icon(Icons.library_books, color: Colors.teal[300], size: 32),
+                            leading: const Icon(Icons.library_books,
+                                color: Colors.blueGrey),
                             title: Text(
                               data['title'] ?? 'No Title',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 16),
                             ),
                             subtitle: data['timestamp'] != null
                                 ? Text(
                               'Posted on ${_formatTimestamp(data['timestamp'])}',
-                              style: TextStyle(color: Colors.grey[600]),
+                              style: const TextStyle(
+                                  fontSize: 13, color: Colors.black54),
                             )
                                 : null,
                             trailing: IconButton(
@@ -162,8 +180,7 @@ class _StudentResourceScreenState extends State<StudentResourceScreen> {
                       },
                     );
                   }).toList(),
-                  const SizedBox(height: 16),
-                ],
+                ),
               );
             }).toList(),
           );

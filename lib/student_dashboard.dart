@@ -218,7 +218,7 @@ class _StudentDashboardScreenState extends State<StudentDashboard> {
                   title: const Text('Student Card'),
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => StudentCardScreen()),
+                    MaterialPageRoute(builder: (_) => StudentCardScreen(studentId: studentId)),
                   ),
                 ),
                 ListTile(
@@ -244,7 +244,10 @@ class _StudentDashboardScreenState extends State<StudentDashboard> {
       appBar: AppBar(
         title: Text('Student Dashboard'),
         backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
         elevation: 4,
+
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: isLoading ? Center(child: CircularProgressIndicator()) : _screens[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(

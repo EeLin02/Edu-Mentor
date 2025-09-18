@@ -153,6 +153,7 @@ class StudentQuizzesScreen extends StatelessWidget {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor:
                                 attempted ? Colors.green : color,
+                                foregroundColor: Colors.white,
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(8)),
                               ),
