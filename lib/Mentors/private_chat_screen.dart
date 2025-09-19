@@ -31,17 +31,24 @@ class PrivateChatScreen extends StatefulWidget {
 }
 
 class _PrivateChatScreenState extends State<PrivateChatScreen> {
+  final _messageKeys = <String, GlobalKey>{};
+  final ScrollController _scrollController = ScrollController();
   final TextEditingController _messageController = TextEditingController();
   bool _emojiShowing = false;
   final FocusNode _focusNode = FocusNode();
   late Stream<DocumentSnapshot<Map<String, dynamic>>> _statusStream;
   List<QueryDocumentSnapshot> _allMessages = [];
   List<QueryDocumentSnapshot> _filteredMessages = [];
+  List<QueryDocumentSnapshot> _displayMessages = [];
   bool _isSearching = false;
   String searchQuery = '';
   bool _isOnline = false;
   bool _isMuted = false;
   Timestamp? _lastClearedAt;
+  int _currentMatchIndex = 0;
+  String? _highlightedMessageId;
+
+
 
 
   @override
@@ -115,12 +122,26 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
       'studentId': widget.studentId,
       'timestamp': FieldValue.serverTimestamp(),
       'slaNotified': false,       // optional
+      'status': 'sent',
     });
 
     _messageController.clear();
-  }
 
-  void _requestPermission() async {
+
+  // auto scroll after sending
+  Future.delayed(const Duration(milliseconds: 100), () {
+  if (_scrollController.hasClients) {
+  _scrollController.animateTo(
+  _scrollController.position.maxScrollExtent,
+  duration: const Duration(milliseconds: 300),
+  curve: Curves.easeOut,
+  );
+  }
+  });
+}
+
+
+void _requestPermission() async {
     FirebaseMessaging messaging = FirebaseMessaging.instance;
 
     NotificationSettings settings = await messaging.requestPermission(
@@ -131,6 +152,29 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
 
     print('User granted permission: ${settings.authorizationStatus}');
   }
+
+  Future<void> markStudentMessagesAsSeen() async {
+    final mentorId = FirebaseAuth.instance.currentUser!.uid;
+
+    final chatDocId = ([mentorId, widget.studentId]..sort()).join('_');
+
+    final snapshot = await FirebaseFirestore.instance
+        .collection('privateChats')
+        .doc(chatDocId)
+        .collection('messages')
+        .where('senderId', isEqualTo: widget.studentId) // student messages
+        .where('status', isEqualTo: 'sent')
+        .get();
+
+    final batch = FirebaseFirestore.instance.batch();
+    for (var doc in snapshot.docs) {
+      batch.update(doc.reference, {'status': 'seen'});
+    }
+    await batch.commit();
+
+
+  }
+
 
   Future<void> deleteForMe(String chatId, String messageId) async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
@@ -328,7 +372,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
           decoration: const InputDecoration(hintText: "Enter keyword"),
           onSubmitted: (value) {
             Navigator.pop(context);
-            _searchMessages(value);
+            _searchMessages(value,_displayMessages);
           },
         ),
         actions: [
@@ -346,23 +390,113 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
     );
   }
 
-  void _searchMessages(String query) {
+  void _searchMessages(String query, List<QueryDocumentSnapshot> displayMessages) {
     setState(() {
       _isSearching = true;
       searchQuery = query;
-      _filteredMessages = _allMessages.where((doc) {
+      _filteredMessages = displayMessages.where((doc) {
         final data = doc.data() as Map<String, dynamic>;
         final text = data['text']?.toString().toLowerCase() ?? '';
         return text.contains(query.toLowerCase());
       }).toList();
+      _currentMatchIndex = 0; // reset when new search
+
     });
 
-    if (_filteredMessages.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No results found")),
-      );
+    _scrollToMatch();
+
+    // 🔹 Auto-scroll to first match
+    if (_filteredMessages.isNotEmpty) {
+      final firstMatch = _filteredMessages.first;
+      final matchIndex = _allMessages.indexOf(firstMatch);
+      if (matchIndex != -1) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollController.animateTo(
+            matchIndex * 80.0, // rough height per item
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+        });
+      }
     }
   }
+
+  void _scrollToMatch() {
+    if (_filteredMessages.isNotEmpty &&
+        _currentMatchIndex >= 0 &&
+        _currentMatchIndex < _filteredMessages.length) {
+      final matchDoc = _filteredMessages[_currentMatchIndex];
+      final matchId = matchDoc.id;
+
+      setState(() => _highlightedMessageId = matchId);
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final context = _messageKeys[matchId]?.currentContext;
+        if (context != null) {
+          Scrollable.ensureVisible(
+            context,
+            duration: const Duration(milliseconds: 400),
+            alignment: 0.2,
+            curve: Curves.easeInOut,
+          );
+        }
+
+        // 4 秒后取消黄色高亮
+        Future.delayed(const Duration(seconds: 4), () {
+          if (mounted && _highlightedMessageId == matchId) {
+            setState(() => _highlightedMessageId = null);
+          }
+        });
+      });
+    }
+  }
+
+
+
+
+  Widget _buildHighlightedText(String text, String query, String msgId) {
+    if (query.isEmpty) return Text(text);
+
+    final matchesQuery = text.toLowerCase().contains(query.toLowerCase());
+    final isHighlighted = msgId == _highlightedMessageId;
+
+    if (!matchesQuery) return Text(text);
+
+    // highlight if it's the active one
+    return RichText(
+      text: TextSpan(
+        children: _highlightOccurrences(text, query, isHighlighted),
+        style: const TextStyle(color: Colors.black),
+      ),
+    );
+  }
+
+  List<TextSpan> _highlightOccurrences(String text, String query, bool isHighlighted) {
+    final spans = <TextSpan>[];
+    final regex = RegExp(RegExp.escape(query), caseSensitive: false);
+
+    int start = 0;
+    for (final match in regex.allMatches(text)) {
+      if (match.start > start) {
+        spans.add(TextSpan(text: text.substring(start, match.start)));
+      }
+      spans.add(TextSpan(
+        text: text.substring(match.start, match.end),
+        style: TextStyle(
+          backgroundColor: isHighlighted ? Colors.yellow : Colors.grey[300], // 👈 active vs inactive
+        ),
+      ));
+      start = match.end;
+    }
+
+    if (start < text.length) {
+      spans.add(TextSpan(text: text.substring(start)));
+    }
+
+    return spans;
+  }
+
+
 
   Future<void> _toggleMuteNotifications(String chatId) async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
@@ -556,13 +690,39 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Showing results for: "$searchQuery"',
+                      'Showing results for: "$searchQuery" '
+                          '${_filteredMessages.isEmpty ? 0 : _currentMatchIndex + 1}/${_filteredMessages.length}',
                       style: const TextStyle(
                         fontSize: 14,
                         fontStyle: FontStyle.italic,
                         color: Colors.black87,
                       ),
                     ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.arrow_upward, size: 20),
+                    onPressed: () {
+                      if (_filteredMessages.isNotEmpty) {
+                        setState(() {
+                          _currentMatchIndex =
+                              (_currentMatchIndex - 1 + _filteredMessages.length) %
+                                  _filteredMessages.length;
+                        });
+                        _scrollToMatch();
+                      }
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.arrow_downward, size: 20),
+                    onPressed: () {
+                      if (_filteredMessages.isNotEmpty) {
+                        setState(() {
+                          _currentMatchIndex =
+                              (_currentMatchIndex + 1) % _filteredMessages.length;
+                        });
+                        _scrollToMatch();
+                      }
+                    },
                   ),
                   GestureDetector(
                     onTap: () => setState(() {
@@ -572,10 +732,8 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
                     }),
                     child: const Chip(
                       label: Text("Clear",
-                        style: const TextStyle(color: Colors.white), // make text white
-                      ),
+                          style: TextStyle(color: Colors.white)),
                       backgroundColor: Colors.redAccent,
-                      labelStyle: TextStyle(color: Colors.white),
                     ),
                   ),
                 ],
@@ -596,6 +754,19 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
 
                 _allMessages = messages;
 
+                // 🔹 Mark messages as seen if current user is the student
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  markStudentMessagesAsSeen();
+                });
+
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (_scrollController.hasClients && !_isSearching) {
+                    _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+                  }
+                });
+
+
+
                 // 🔹 Apply "delete for me" filter
                 var filtered = messages.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
@@ -604,7 +775,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
                 }).toList();
 
                 // 🔹 Apply "clear history for me" filter
-                final displayMessages = filtered.where((doc) {
+                _displayMessages = filtered.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
                   final ts = data['timestamp'] as Timestamp?;
                   if (_lastClearedAt != null && ts != null) {
@@ -613,14 +784,20 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
                   return true;
                 }).toList();
 
+                _messageKeys.clear(); // reset so stale keys don’t stick
+
+
                 // 🔹 Now use displayMessages
                     return ListView.builder(
+                      controller: _scrollController,
                       padding: const EdgeInsets.all(10),
-                      itemCount: displayMessages.length,
+                      itemCount: _displayMessages.length,
                       itemBuilder: (context, index) {
-                        final doc = displayMessages[index];
+                        final doc = _displayMessages[index];
                         final msg = doc.data() as Map<String, dynamic>;
                         final isMe = msg['senderId'] == widget.mentorId;
+
+
 
                         if (msg['deletedForEveryone'] == true) {
                           return Align(
@@ -643,45 +820,59 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
                                 ),
                               ),
                             ),
+
                           );
+
                         }
 
-                        return GestureDetector(
-                          onLongPress: isMe
-                              ? () => _showDeleteDialog(doc.id, msg['senderId'])
-                              : null,
-                          child: Align(
-                            alignment: isMe
-                                ? Alignment.centerRight
-                                : Alignment.centerLeft,
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(
-                                  vertical: 4, horizontal: 8),
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 10, horizontal: 14),
-                              decoration: BoxDecoration(
-                                color: isMe
-                                    ? const Color(0xffDCF8C6)
-                                    : Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  if (msg['fileUrl'] != null) _buildFileMessage(msg),
-                                  if (msg['text'] != null &&
-                                      msg['text'].toString().isNotEmpty)
-                                    Text(msg['text'],
-                                        style: const TextStyle(fontSize: 16)),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    msg['timestamp'] != null
-                                        ? _formatTimestamp(msg['timestamp'] as Timestamp)
-                                        : 'Sending...',
-                                    style: const TextStyle(
-                                        fontSize: 10, color: Colors.grey),
+                        final msgId = doc.id;
+                        _messageKeys.putIfAbsent(msgId, () => GlobalKey());
+
+
+                        return KeyedSubtree(
+                          key: _messageKeys[msgId],
+                          child: Container(
+                            color: doc.id == _highlightedMessageId
+                                ? Colors.yellow.shade200 // flash when highlighted
+                                : null,
+                            child: GestureDetector(
+                              onLongPress: isMe ? () => _showDeleteDialog(doc.id, msg['senderId']) : null,
+                              child: Align(
+                                alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                                child: Container(
+                                  margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                                  decoration: BoxDecoration(
+                                    color: isMe ? const Color(0xffDCF8C6) : Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
-                                ],
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      if (msg['fileUrl'] != null) _buildFileMessage(msg),
+                                      if (msg['text'] != null && msg['text'].toString().isNotEmpty)
+                                        _isSearching
+                                            ? _buildHighlightedText(msg['text'], searchQuery, doc.id)
+                                            : Text(
+                                          msg['text'],
+                                          style: const TextStyle(fontSize: 16),
+                                        ),
+
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        msg['timestamp'] != null
+                                            ? _formatTimestamp(msg['timestamp'] as Timestamp)
+                                            : 'Sending...',
+                                        style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                      ),
+                                      if (isMe)
+                                        Text(
+                                          msg['status'] ?? 'sent',
+                                          style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                        ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -727,7 +918,8 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
           'mentorId': widget.mentorId,
           'studentId': widget.studentId,
           'timestamp': FieldValue.serverTimestamp(),
-          'slaNotified': false,        // optional
+          'slaNotified': false,
+          'status': 'sent',   // optional
         });
 
       } catch (e) {
@@ -741,6 +933,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
   void dispose() {
     _messageController.dispose();
     _focusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 

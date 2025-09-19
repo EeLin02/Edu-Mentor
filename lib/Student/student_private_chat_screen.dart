@@ -29,10 +29,16 @@ class PrivateChatScreen extends StatefulWidget {
 class _PrivateChatScreenState extends State<PrivateChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
+  final messageKeys = <String, GlobalKey>{}; // add at state level
+
+
   bool _emojiShowing = false;
   List<QueryDocumentSnapshot> _allMessages = [];
   bool _isSearching = false;
   bool _isMuted = false; // mute toggle
+  bool _autoScroll = true;
+
 
   String searchQuery = '';
   late final String studentId;
@@ -64,23 +70,6 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
   CollectionReference get messageCollection =>
       FirebaseFirestore.instance.collection('privateChats').doc(chatId).collection('messages');
 
-  Future<void> _sendMessage() async {
-    final text = _messageController.text.trim();
-    if (text.isEmpty) return;
-
-    await messageCollection.add({
-      'text': text,
-      'senderId': studentId,
-      'senderRole': "student",
-      'mentorId': widget.mentorId, // <-- useful for SLA check
-      'studentId': studentId,      // <-- useful for SLA check
-      'timestamp': FieldValue.serverTimestamp(),
-      'slaNotified': false,        // <-- optional default
-    });
-
-
-    _messageController.clear();
-  }
 
   Future<void> _loadMuteStatus() async {
     final muteRef = FirebaseFirestore.instance.collection('mutedChats').doc(chatId);
@@ -198,6 +187,22 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
     }
   }
 
+  void _scrollToMessage(String messageId) {
+    final key = messageKeys[messageId];
+    if (key == null) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = key.currentContext;
+      if (context != null) {
+        Scrollable.ensureVisible(
+          context,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut,
+          alignment: 0.1, // adjust where it appears on screen
+        );
+      }
+    });
+  }
 
   void _handleMenuAction(String value) async {
     switch (value) {
@@ -206,11 +211,17 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
         break;
 
       case 'search':
-        showSearch(
+        final selectedMessageId = await showSearch<String?>(
           context: context,
-          delegate: ChatSearchDelegate(_allMessages),
+          delegate: ChatSearchDelegate(_allMessages, _scrollController),
         );
+
+        if (selectedMessageId != null) {
+          _scrollToMessage(selectedMessageId);
+        }
+
         break;
+
 
       case 'toggleMute':
         await _toggleMuteNotifications();
@@ -345,13 +356,34 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
                 final messages = snapshot.data!.docs;
                 _allMessages = messages;
 
+                // 🔹 Student should only mark mentor’s "sent" messages as seen
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  markMessagesAsSeen();
+                });
+
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (_scrollController.hasClients && _autoScroll) {
+                    _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+                  }
+                });
+
+
                 return ListView.builder(
+                  controller: _scrollController,
                   padding: const EdgeInsets.all(10),
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final doc = messages[index];
                     final msg = doc.data()! as Map<String, dynamic>;
                     final isMe = msg['senderId'] == studentId;
+
+                    final deletedBy = (msg['deletedBy'] ?? []) as List;
+                    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+                    // Skip messages deleted by current user
+                    if (deletedBy.contains(uid)) {
+                      return const SizedBox.shrink();
+                    }
 
                     // Handle deleted-for-everyone
                     if (msg['deletedForEveryone'] == true) {
@@ -371,8 +403,10 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
                         ),
                       );
                     }
+                    final key = messageKeys.putIfAbsent(doc.id, () => GlobalKey());
 
                     return GestureDetector(
+                      key: key,  // attach the key here
                       onLongPress: () => _showDeleteDialog(doc.id, msg['senderId']),
                       child: Align(
                         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -396,6 +430,11 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
                                     : 'Sending...',
                                 style: const TextStyle(fontSize: 10, color: Colors.grey),
                               ),
+                              if (isMe)
+                                Text(
+                                  msg['status'] ?? 'sent',
+                                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                ),
                             ],
                           ),
                         ),
@@ -511,6 +550,59 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
     }
   }
 
+
+  Future<void> markMessagesAsSeen() async {
+    final studentId = FirebaseAuth.instance.currentUser!.uid;
+
+    final chatId = [studentId, widget.mentorId]..sort();
+    final chatDocId = chatId.join('_');
+
+    final snapshot = await FirebaseFirestore.instance
+        .collection('privateChats')
+        .doc(chatDocId)   // now it's a String ✅
+        .collection('messages')
+        .where('senderId', isEqualTo: widget.mentorId)
+        .where('status', isEqualTo: 'sent')
+        .get();
+
+    final batch = FirebaseFirestore.instance.batch();
+    for (var doc in snapshot.docs) {
+      batch.update(doc.reference, {'status': 'seen'});
+    }
+    await batch.commit();
+  }
+
+  Future<void> _sendMessage() async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty) return;
+
+    await messageCollection.add({
+      'text': text,
+      'senderId': studentId,
+      'senderRole': "student",
+      'mentorId': widget.mentorId,
+      'studentId': studentId,
+      'status': 'sent',
+      'timestamp': FieldValue.serverTimestamp(),
+      'slaNotified': false,
+    });
+
+    _messageController.clear();
+
+    // auto scroll after sending
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+
+
   void _openFile(String url) async {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
@@ -544,6 +636,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
           'senderRole': "student",
           'mentorId': widget.mentorId,
           'studentId': studentId,
+          'status': 'sent',          // 🔹 add this
           'timestamp': FieldValue.serverTimestamp(),
           'slaNotified': false,
         });
@@ -561,52 +654,193 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
   }
 }
 
-class ChatSearchDelegate extends SearchDelegate {
+class ChatSearchDelegate extends SearchDelegate<String?> {
   final List<QueryDocumentSnapshot> messages;
+  final ScrollController scrollController;
+  int _currentMatchIndex = 0;
 
-  ChatSearchDelegate(this.messages);
+  ChatSearchDelegate(this.messages, this.scrollController);
 
+  // 🔹 Required: clear (X) button
   @override
-  List<Widget>? buildActions(BuildContext context) => [
-    IconButton(
-      icon: const Icon(Icons.clear),
-      onPressed: () => query = '',
-    )
-  ];
+  List<Widget> buildActions(BuildContext context) {
+    return [
+      if (query.isNotEmpty)
+        IconButton(
+          icon: const Icon(Icons.clear),
+          onPressed: () {
+            query = '';
+            showSuggestions(context);
+          },
+        )
+    ];
+  }
 
+  // 🔹 Required: back button
   @override
-  Widget? buildLeading(BuildContext context) => IconButton(
-    icon: const Icon(Icons.arrow_back),
-    onPressed: () => close(context, null),
-  );
+  Widget buildLeading(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.arrow_back),
+      onPressed: () => close(context, null),
+    );
+  }
+
+  // Highlight text helper
+  Widget buildHighlightText(String text, String query) {
+    if (query.isEmpty) return Text(text);
+
+    final lowerText = text.toLowerCase();
+    final lowerQuery = query.toLowerCase();
+    final spans = <TextSpan>[];
+    int start = 0, index;
+
+    while ((index = lowerText.indexOf(lowerQuery, start)) != -1) {
+      if (index > start) {
+        spans.add(TextSpan(text: text.substring(start, index)));
+      }
+      spans.add(TextSpan(
+        text: text.substring(index, index + query.length),
+        style: const TextStyle(
+          backgroundColor: Colors.yellow,
+          color: Colors.black,
+          fontWeight: FontWeight.bold,
+        ),
+      ));
+      start = index + query.length;
+    }
+    if (start < text.length) {
+      spans.add(TextSpan(text: text.substring(start)));
+    }
+
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(color: Colors.black),
+        children: spans,
+      ),
+    );
+  }
+
+  void _scrollToMatch(List<QueryDocumentSnapshot> results) {
+    if (results.isEmpty) return;
+
+    final matchDoc = results[_currentMatchIndex];
+    final key = (scrollController.position.context.storageContext as Element)
+        .findAncestorStateOfType<_PrivateChatScreenState>()!
+        .messageKeys[matchDoc.id];
+
+    if (key?.currentContext != null) {
+      Scrollable.ensureVisible(
+        key!.currentContext!,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+        alignment: 0.1,
+      );
+    }
+  }
+
 
   @override
   Widget buildResults(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
     final results = messages.where((msg) {
       final data = msg.data() as Map<String, dynamic>;
       final text = data['text'] ?? '';
-      return text.toString().toLowerCase().contains(query.toLowerCase());
+      final deletedBy = List.from(data['deletedBy'] ?? []);
+
+      // Only show if current user has NOT cleared it and matches search
+      return !deletedBy.contains(uid) &&
+          text.toString().toLowerCase().contains(query.toLowerCase());
     }).toList();
+
 
     if (results.isEmpty) {
       return const Center(child: Text("No matching messages found"));
     }
 
-    return ListView(
-      children: results.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        return ListTile(
-          title: Text(data['text'] ?? ''),
-          subtitle: Text(
-            data['timestamp'] != null
-                ? DateFormat('MMM d, hh:mm a').format((data['timestamp'] as Timestamp).toDate())
-                : '',
+    return Column(
+      children: [
+        // 🔹 Banner with navigation
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.yellow.shade100,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.yellow.shade700),
           ),
-        );
-      }).toList(),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Results for "$query" '
+                      '(${_currentMatchIndex + 1}/${results.length})',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontStyle: FontStyle.italic,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.arrow_upward, size: 20),
+                onPressed: () {
+                  if (results.isNotEmpty) {
+                    _currentMatchIndex =
+                        (_currentMatchIndex - 1 + results.length) % results.length;
+                    _scrollToMatch(results);
+                    (context as Element).markNeedsBuild();
+                  }
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.arrow_downward, size: 20),
+                onPressed: () {
+                  if (results.isNotEmpty) {
+                    _currentMatchIndex =
+                        (_currentMatchIndex + 1) % results.length;
+                    _scrollToMatch(results);
+                    (context as Element).markNeedsBuild();
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+
+        // 🔹 Results list
+        Expanded(
+          child: ListView.builder(
+            itemCount: results.length,
+            itemBuilder: (context, i) {
+              final doc = results[i];
+              final data = doc.data() as Map<String, dynamic>;
+              final text = data['text'] ?? '';
+
+              return Container(
+                color: i == _currentMatchIndex ? Colors.grey.shade300 : null,
+                child: ListTile(
+                  title: buildHighlightText(text, query),
+                  subtitle: Text(
+                    data['timestamp'] != null
+                        ? DateFormat('MMM d, hh:mm a').format((data['timestamp'] as Timestamp).toDate())
+                        : '',
+                  ),
+                  onTap: () {
+                    // Close search and return the message id
+                    close(context, doc.id);
+                  },
+                )
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
   @override
   Widget buildSuggestions(BuildContext context) => buildResults(context);
 }
+
