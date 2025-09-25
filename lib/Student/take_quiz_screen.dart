@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class TakeQuizScreen extends StatefulWidget {
   final String quizId;
   final String studentId;
-  final String classId;
+  final String sectionId;
   final String subjectId;
   final Color color;
   final String title;
@@ -13,7 +13,7 @@ class TakeQuizScreen extends StatefulWidget {
     super.key,
     required this.quizId,
     required this.studentId,
-    required this.classId,
+    required this.sectionId,
     required this.subjectId,
     required this.color,
     required this.title,
@@ -51,29 +51,49 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
 
 
   Future<void> _fetchNextQuiz() async {
-    // Find the next quiz by publishDate > current quiz
-    final currentQuiz =
-    await FirebaseFirestore.instance.collection("quizzes").doc(widget.quizId).get();
+    try {
+      final quizDoc = await FirebaseFirestore.instance
+          .collection("quizzes")
+          .doc(widget.quizId)
+          .get();
 
-    if (!currentQuiz.exists) return;
+      if (!quizDoc.exists) return;
 
-    final currentPublishDate = (currentQuiz["publishDate"] as Timestamp).toDate();
+      final quizData = quizDoc.data() as Map<String, dynamic>;
+      final DateTime currentPublishDate =
+      (quizData["publishDate"] as Timestamp).toDate();
 
-    final nextQuizSnapshot = await FirebaseFirestore.instance
-        .collection("quizzes")
-        .where("classId", isEqualTo: widget.classId)
-        .where("subjectId", isEqualTo: widget.subjectId)
-        .where("publishDate", isGreaterThan: currentPublishDate)
-        .orderBy("publishDate")
-        .limit(1)
-        .get();
+      final String category = quizData["category"] ?? "Uncategorized";
+      final String sectionId = quizData["sectionId"];
+      final String subjectId = quizData["subjectId"];
 
-    if (nextQuizSnapshot.docs.isNotEmpty) {
-      setState(() {
-        nextQuizDoc = nextQuizSnapshot.docs.first;
-      });
+      // Query for next quiz in SAME category, section, subject
+      final querySnap = await FirebaseFirestore.instance
+          .collection("quizzes")
+          .where("sectionId", isEqualTo: sectionId)
+          .where("subjectId", isEqualTo: subjectId)
+          .where("category", isEqualTo: category)
+          .where("publishDate", isGreaterThan: currentPublishDate)
+          .orderBy("publishDate")
+          .limit(1)
+          .get();
+
+      if (querySnap.docs.isNotEmpty) {
+        setState(() {
+          nextQuizDoc = querySnap.docs.first; // ✅ just store it
+        });
+      } else {
+        setState(() {
+          nextQuizDoc = null; // no more quizzes
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching next quiz: $e");
     }
   }
+
+
+
 
   Future<void> _loadPreviousSubmission() async {
     final submissionDoc = await FirebaseFirestore.instance
@@ -92,6 +112,7 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
         total = data["total"] ?? 0;
         submitted = true;
         answers = restoredAnswers;
+        correctness = Map<String, bool>.from(data["correctness"] ?? {});
       });
 
       //  update controllers so UI shows the restored answer
@@ -115,33 +136,58 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
     for (var q in questions) {
       final questionId = q.id;
       final type = q["type"] ?? "multiple_choice";
-      final correctAnswer = q["correctAnswer"];
+      final List<String> options =
+      (q["options"] != null) ? List<String>.from(q["options"]) : [];
+
+      // 🔹 Normalize correct answers → always a list of lowercase strings
+      final rawAnswer = q["correctAnswer"];
+      final List<String> correctAnswers = (rawAnswer is List)
+          ? rawAnswer.map((e) => e.toString().trim().toLowerCase()).toList()
+          : [rawAnswer?.toString().trim().toLowerCase() ?? ""];
+
       bool isCorrect = false;
 
       if (type == "multiple_choice") {
-        final options = List<String>.from(q["options"] ?? []);
-        final selectedIndex = answers[questionId] is int
-            ? answers[questionId] as int
-            : (answers[questionId] is num ? (answers[questionId] as num).toInt() : null);
+        final allowMultiple = q["allowMultiple"] == true;
 
-        if (selectedIndex != null &&
-            selectedIndex >= 0 &&
-            selectedIndex < options.length) {
-          final selectedValue = options[selectedIndex];
-          if (selectedValue.toString().trim().toLowerCase() ==
-              correctAnswer.toString().trim().toLowerCase()) {
-            isCorrect = true;
+        if (allowMultiple) {
+          // ----- MULTIPLE CHOICE -----
+          final selectedIndexes = (answers[questionId] is List)
+              ? List<int>.from(answers[questionId])
+              : <int>[];
+
+          final selectedValues = selectedIndexes
+              .where((i) => i >= 0 && i < options.length)
+              .map((i) => options[i].toString().trim().toLowerCase())
+              .toList();
+
+          // Correct if selected == correct exactly (no extras, no missing)
+          isCorrect = selectedValues.toSet().containsAll(correctAnswers) &&
+              correctAnswers.toSet().containsAll(selectedValues);
+        } else {
+          // ----- SINGLE CHOICE -----
+          final selectedIndex = answers[questionId] is int
+              ? answers[questionId] as int
+              : (answers[questionId] is num
+              ? (answers[questionId] as num).toInt()
+              : null);
+
+          if (selectedIndex != null &&
+              selectedIndex >= 0 &&
+              selectedIndex < options.length) {
+            final selectedValue =
+            options[selectedIndex].toString().trim().toLowerCase();
+            isCorrect = correctAnswers.contains(selectedValue);
           }
         }
       } else if (type == "fill_blank") {
+        // ----- FILL IN THE BLANK -----
         final studentAnswer = answers[questionId];
         if (studentAnswer != null) {
-          final normalizedStudent = studentAnswer.toString().trim().toLowerCase();
-          final normalizedCorrect = correctAnswer.toString().trim().toLowerCase();
-
-          if (normalizedStudent == normalizedCorrect) {
-            isCorrect = true;
-          }
+          final normalizedStudent =
+          studentAnswer.toString().trim().toLowerCase();
+          // If any correct answer matches → correct
+          isCorrect = correctAnswers.contains(normalizedStudent);
         }
       }
 
@@ -149,22 +195,26 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
       correctness[questionId] = isCorrect;
     }
 
+    // Update state
     setState(() {
       score = newScore;
       total = totalQuestions;
       submitted = true;
     });
 
-    //Fetch student info from Firestore
+    // Fetch student info
     final studentDoc = await FirebaseFirestore.instance
         .collection("students")
         .doc(widget.studentId)
         .get();
+    final studentData =
+        studentDoc.data() as Map<String, dynamic>? ?? {};
 
-    String studentName = studentDoc["name"] ?? "Unknown";
-    String studentProfileUrl = studentDoc["profileUrl"] ?? "";
-    String studentIdNo = studentDoc["studentIdNo"] ?? widget.studentId;
+    String studentName = studentData["name"] ?? "Unknown";
+    String studentProfileUrl = studentData["profileUrl"] ?? "";
+    String studentIdNo = studentData["studentIdNo"] ?? widget.studentId;
 
+    // Save submission
     await FirebaseFirestore.instance
         .collection("quizzes")
         .doc(widget.quizId)
@@ -174,6 +224,7 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
       "score": newScore,
       "total": totalQuestions,
       "answers": answers,
+      "correctness": correctness, // 🔹 Save correctness map
       "submittedAt": FieldValue.serverTimestamp(),
       "studentId": widget.studentId,
       "studentIdNo": studentIdNo,
@@ -242,6 +293,7 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
             children: [
               for (var q in questions) _buildQuestionCard(q),
               const SizedBox(height: 20),
+
               if (!submitted)
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
@@ -264,7 +316,7 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // Retry button (always available)
+                    // Retry button
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.orange,
@@ -282,13 +334,13 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
                           nextQuizDoc != null &&
                           nextQuizAvailable)
                           ? () {
-                        Navigator.push(
+                        Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
                             builder: (_) => TakeQuizScreen(
                               quizId: nextQuizId,
                               studentId: widget.studentId,
-                              classId: widget.classId,
+                              sectionId: widget.sectionId,
                               subjectId: widget.subjectId,
                               color: widget.color,
                               title: nextQuizDoc!["title"] ?? "Next Quiz",
@@ -328,8 +380,10 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
     final questionId = q.id;
     final text = q["question"] ?? "Untitled Question";
     final type = q["type"] ?? "multiple_choice";
-    final correctAnswer = q["correctAnswer"];
-
+    final dynamic rawAnswer = q["correctAnswer"];
+    final String correctAnswer = (rawAnswer is List && rawAnswer.isNotEmpty)
+        ? rawAnswer.first.toString()
+        : rawAnswer?.toString() ?? "";
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 12),
       child: Padding(
@@ -354,60 +408,87 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
     );
   }
 
-  List<Widget> _buildMultipleChoiceOptions(
-      DocumentSnapshot q, String questionId, String correctAnswer) {
-    final options = List<String>.from(q["options"] ?? []);
-    final selectedIndex = answers[questionId] is int
-        ? answers[questionId] as int
-        : (answers[questionId] is num ? (answers[questionId] as num).toInt() : null);
+    List<Widget> _buildMultipleChoiceOptions(
+        DocumentSnapshot q, String questionId, String correctAnswer) {
+      final options = List<String>.from(q["options"] ?? []);
+      final allowMultiple = q["allowMultiple"] == true;
 
+      if (allowMultiple) {
+        final selectedIndexes = (answers[questionId] is List)
+            ? List<int>.from(answers[questionId])
+            : <int>[];
 
-    return [
-      for (int i = 0; i < options.length; i++)
-        RadioListTile<int>(
-          value: i,
-          groupValue: selectedIndex,
-          title: Text(options[i]),
-          onChanged: submitted
-              ? null
-              : (val) {
-            setState(() {
-              answers[questionId] = val!;
-            });
-          },
-          secondary: submitted
-              ? Icon(
-            options[i] == correctAnswer
-                ? Icons.check_circle
-                : (selectedIndex == i && options[i] != correctAnswer
-                ? Icons.cancel
-                : null),
-            color: options[i] == correctAnswer
-                ? Colors.green
-                : (selectedIndex == i ? Colors.red : Colors.grey),
-          )
-              : null,
-        ),
-      if (submitted && selectedIndex != null)
-        Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Text(
-            selectedIndex != null && options[selectedIndex] == correctAnswer
-                ? "You answered correctly ✅"
-                : "Your answer: ${options[selectedIndex]} ❌ | Correct: $correctAnswer",
-            style: TextStyle(
-              color: selectedIndex != null &&
-                  options[selectedIndex] == correctAnswer
-                  ? Colors.green
-                  : Colors.red,
-              fontWeight: FontWeight.bold,
+        return [
+          for (int i = 0; i < options.length; i++)
+            CheckboxListTile(
+              value: selectedIndexes.contains(i),
+              title: Text(options[i]),
+              onChanged: submitted
+                  ? null
+                  : (val) {
+                setState(() {
+                  if (val == true) {
+                    selectedIndexes.add(i);
+                  } else {
+                    selectedIndexes.remove(i);
+                  }
+                  answers[questionId] = selectedIndexes;
+                });
+              },
             ),
-          ),
-        ),
-    ];
-  }
+          if (submitted)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                correctness[questionId] == true
+                    ? "Correct ✅"
+                    : "Incorrect ❌ | Correct answers: ${List<String>.from(q["correctAnswer"]).join(", ")}",
+                style: TextStyle(
+                  color: correctness[questionId] == true ? Colors.green : Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+        ];
+      } else {
+        // Keep your existing RadioListTile logic for single-choice
+        final selectedIndex = answers[questionId] is int
+            ? answers[questionId] as int
+            : (answers[questionId] is num ? (answers[questionId] as num).toInt() : null);
 
-  Widget _buildFillInBlank(
+        return [
+          for (int i = 0; i < options.length; i++)
+            RadioListTile<int>(
+              value: i,
+              groupValue: selectedIndex,
+              title: Text(options[i]),
+              onChanged: submitted
+                  ? null
+                  : (val) {
+                setState(() {
+                  answers[questionId] = val!;
+                });
+              },
+            ),
+          if (submitted && selectedIndex != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                correctness[questionId] == true
+                    ? "You answered correctly ✅"
+                    : "Your answer: ${options[selectedIndex]} ❌ | Correct: $correctAnswer",
+                style: TextStyle(
+                  color: correctness[questionId] == true ? Colors.green : Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+        ];
+      }
+    }
+
+
+    Widget _buildFillInBlank(
       DocumentSnapshot q, String questionId, String correctAnswer) {
 
     // Ensure controller exists
@@ -442,19 +523,16 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
           Padding(
             padding: const EdgeInsets.only(top: 8.0),
             child: Text(
-              controller.text.trim().toLowerCase() ==
-                  correctAnswer.toString().trim().toLowerCase()
+              correctness[questionId] == true
                   ? "You answered correctly ✅"
-                  : "Your answer: ${controller.text} ❌ | Correct: $correctAnswer",
+                  : "Your answer: ${controller.text} ❌ | Correct: ${q["correctAnswer"]}",
               style: TextStyle(
-                color: controller.text.trim().toLowerCase() ==
-                    correctAnswer.toString().trim().toLowerCase()
-                    ? Colors.green
-                    : Colors.red,
+                color: correctness[questionId] == true ? Colors.green : Colors.red,
                 fontWeight: FontWeight.bold,
               ),
             ),
           ),
+
       ],
     );
   }

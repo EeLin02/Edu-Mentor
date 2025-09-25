@@ -4,22 +4,24 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
 import 'Quiz_submission.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:dropdown_search/dropdown_search.dart';
+
 
 class WeeklyQuizScreen extends StatefulWidget {
   final String subjectId;
-  final String classId;
+  final String sectionId;
   final String mentorId;
   final String subjectName;
-  final String className;
+  final String sectionName;
   final Color color;
 
   const WeeklyQuizScreen({
     Key? key,
     required this.subjectId,
-    required this.classId,
+    required this.sectionId,
     required this.mentorId,
     required this.subjectName,
-    required this.className,
+    required this.sectionName,
     required this.color,
   }) : super(key: key);
 
@@ -179,6 +181,7 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
             ),
             const SizedBox(height: 12),
 
+
             // 🔹 Category Dropdown from Firestore
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -191,21 +194,31 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
                 }
                 final categories = snapshot.data!.docs
                     .map((d) => d["name"].toString())
+                    .toSet() // 🔹 ensure no duplicates
                     .toList();
 
-                if (_selectedCategory == null && categories.isNotEmpty) {
-                  _selectedCategory = categories.first;
+                // Ensure current selection is valid
+                if (!categories.contains(_selectedCategory)) {
+                  _selectedCategory = categories.isNotEmpty ? categories.first : null;
                 }
 
-                return DropdownButtonFormField<String>(
-                  value: _selectedCategory,
-                  decoration: const InputDecoration(
-                    labelText: "Category",
-                    border: OutlineInputBorder(),
+                return DropdownSearch<String>(
+                  items: categories,
+                  selectedItem: _selectedCategory,
+                  popupProps: const PopupProps.menu(
+                    showSearchBox: true, // 🔎 enables search
+                    searchFieldProps: TextFieldProps(
+                      decoration: InputDecoration(
+                        hintText: "Search category...",
+                      ),
+                    ),
                   ),
-                  items: categories.map((c) {
-                    return DropdownMenuItem(value: c, child: Text(c));
-                  }).toList(),
+                  dropdownDecoratorProps: const DropDownDecoratorProps(
+                    dropdownSearchDecoration: InputDecoration(
+                      labelText: "Category",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
                   onChanged: (val) {
                     setState(() => _selectedCategory = val);
                   },
@@ -322,138 +335,180 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
     final categoriesSnap =
     await FirebaseFirestore.instance.collection("quizCategories").get();
 
+    String searchQuery = "";
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Manage Categories"),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView(
-            shrinkWrap: true,
-            children: categoriesSnap.docs.map((doc) {
-              final category = doc["name"];
-              return ListTile(
-                title: Text(category),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // ✏️ Edit button
-                    IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.blue),
-                      onPressed: () async {
-                        final controller = TextEditingController(text: category);
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          // 🔎 Filter categories by search
+          final filteredDocs = categoriesSnap.docs.where((doc) {
+            final name = (doc["name"] ?? "").toString().toLowerCase();
+            return name.contains(searchQuery.toLowerCase());
+          }).toList();
 
-                        final newName = await showDialog<String>(
-                          context: context,
-                          builder: (editCtx) => AlertDialog(
-                            title: const Text("Edit Category"),
-                            content: TextField(
-                              controller: controller,
-                              decoration: const InputDecoration(
-                                labelText: "Category name",
+          return AlertDialog(
+            title: const Text("Manage Categories"),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 🔎 Search box
+                  TextField(
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      hintText: "Search categories...",
+                    ),
+                    onChanged: (val) {
+                      setDialogState(() {
+                        searchQuery = val;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: filteredDocs.map((doc) {
+                        final category = doc["name"];
+                        return ListTile(
+                          title: Text(category),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // ✏️ Edit button
+                              IconButton(
+                                icon: const Icon(Icons.edit, color: Colors.blue),
+                                onPressed: () async {
+                                  final controller =
+                                  TextEditingController(text: category);
+
+                                  final newName =
+                                  await showDialog<String>(
+                                    context: context,
+                                    builder: (editCtx) => AlertDialog(
+                                      title: const Text("Edit Category"),
+                                      content: TextField(
+                                        controller: controller,
+                                        decoration: const InputDecoration(
+                                          labelText: "Category name",
+                                        ),
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(editCtx),
+                                          child: const Text("Cancel"),
+                                        ),
+                                        ElevatedButton(
+                                          onPressed: () => Navigator.pop(
+                                              editCtx,
+                                              controller.text.trim()),
+                                          child: const Text("Save"),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+
+                                  if (newName != null &&
+                                      newName.isNotEmpty &&
+                                      newName != category) {
+                                    final batch =
+                                    FirebaseFirestore.instance.batch();
+
+                                    final quizSnap = await FirebaseFirestore
+                                        .instance
+                                        .collection("quizzes")
+                                        .where("category", isEqualTo: category)
+                                        .get();
+
+                                    for (var quiz in quizSnap.docs) {
+                                      batch.update(
+                                          quiz.reference, {"category": newName});
+                                    }
+
+                                    batch.update(doc.reference, {"name": newName});
+
+                                    await batch.commit();
+                                    Navigator.pop(ctx);
+                                    _loadCategories();
+                                  }
+                                },
                               ),
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(editCtx),
-                                child: const Text("Cancel"),
-                              ),
-                              ElevatedButton(
-                                onPressed: () =>
-                                    Navigator.pop(editCtx, controller.text.trim()),
-                                child: const Text("Save"),
+                              // 🗑️ Delete button
+                              IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.red),
+                                onPressed: () async {
+                                  final confirm = await showDialog<bool>(
+                                    context: context,
+                                    builder: (delCtx) => AlertDialog(
+                                      title: const Text("Delete Category"),
+                                      content: Text(
+                                          "Are you sure you want to delete \"$category\"?\n\nAll quizzes in this category will be moved to \"Uncategorized\"."),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(delCtx, false),
+                                          child: const Text("Cancel"),
+                                        ),
+                                        ElevatedButton(
+                                          onPressed: () =>
+                                              Navigator.pop(delCtx, true),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.red,
+                                          ),
+                                          child: const Text("Delete"),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+
+                                  if (confirm == true) {
+                                    final batch =
+                                    FirebaseFirestore.instance.batch();
+
+                                    final quizSnap = await FirebaseFirestore
+                                        .instance
+                                        .collection("quizzes")
+                                        .where("category", isEqualTo: category)
+                                        .get();
+
+                                    for (var quiz in quizSnap.docs) {
+                                      batch.update(
+                                          quiz.reference,
+                                          {"category": "Uncategorized"});
+                                    }
+
+                                    batch.delete(doc.reference);
+
+                                    await batch.commit();
+                                    Navigator.pop(ctx);
+                                    _loadCategories();
+                                  }
+                                },
                               ),
                             ],
                           ),
                         );
-
-                        if (newName != null &&
-                            newName.isNotEmpty &&
-                            newName != category) {
-                          // update quizzes that use old name
-                          final batch = FirebaseFirestore.instance.batch();
-
-                          final quizSnap = await FirebaseFirestore.instance
-                              .collection("quizzes")
-                              .where("category", isEqualTo: category)
-                              .get();
-
-                          for (var quiz in quizSnap.docs) {
-                            batch.update(quiz.reference, {"category": newName});
-                          }
-
-                          // update the category doc itself
-                          batch.update(doc.reference, {"name": newName});
-
-                          await batch.commit();
-                          Navigator.pop(ctx); // close Manage dialog
-                          _loadCategories(); // reload dropdown
-                        }
-                      },
+                      }).toList(),
                     ),
-
-                    // 🗑️ Delete button
-                    IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () async {
-                        final confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (delCtx) => AlertDialog(
-                            title: const Text("Delete Category"),
-                            content: Text(
-                                "Are you sure you want to delete \"$category\"?\n\nAll quizzes in this category will be moved to \"Uncategorized\"."),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(delCtx, false),
-                                child: const Text("Cancel"),
-                              ),
-                              ElevatedButton(
-                                onPressed: () => Navigator.pop(delCtx, true),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red,
-                                ),
-                                child: const Text("Delete"),
-                              ),
-                            ],
-                          ),
-                        );
-
-                        if (confirm == true) {
-                          final batch = FirebaseFirestore.instance.batch();
-
-                          final quizSnap = await FirebaseFirestore.instance
-                              .collection("quizzes")
-                              .where("category", isEqualTo: category)
-                              .get();
-
-                          for (var quiz in quizSnap.docs) {
-                            batch.update(
-                                quiz.reference, {"category": "Uncategorized"});
-                          }
-
-                          batch.delete(doc.reference);
-
-                          await batch.commit();
-                          Navigator.pop(ctx); // close Manage dialog
-                          _loadCategories(); // reload dropdown
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Close"),
-          ),
-        ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text("Close"),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
+
 
   // --- Add/Edit Question Dialog ---
   void _addOrEditQuestionDialog({Map<String, dynamic>? existing}) {
@@ -643,7 +698,7 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
       "description": _descriptionController.text,
       "publishDate": _publishDate,
       "subjectId": widget.subjectId,
-      "classId": widget.classId,
+      "sectionId": widget.sectionId,
       "mentorId": widget.mentorId,
       "category": _selectedCategory ?? "Uncategorized",
       "createdAt": FieldValue.serverTimestamp(),
@@ -734,7 +789,7 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
             stream: FirebaseFirestore.instance
                 .collection("quizzes")
                 .where("mentorId", isEqualTo: widget.mentorId)
-                .where("classId", isEqualTo: widget.classId)
+                .where("sectionId", isEqualTo: widget.sectionId)
                 .where("subjectId", isEqualTo: widget.subjectId)
                 .orderBy("createdAt", descending: true)
                 .snapshots(),
@@ -745,20 +800,17 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
 
               var quizzes = snapshot.data!.docs;
 
-              // Apply search filter
+              // Apply search + category filter safely
               quizzes = quizzes.where((doc) {
-                final title = doc["title"].toString().toLowerCase();
-                return title.contains(_searchQuery);
-              }).toList();
+                final data = doc.data() as Map<String, dynamic>;
+                final title = (data["title"] ?? "").toString().toLowerCase();
+                final category = data["category"] ?? "Uncategorized";
 
-              // Apply category filter
-              if (_filterCategory != "All") {
-                quizzes = quizzes.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final category = data["category"] ?? "Uncategorized"; // safe access
-                  return category == _filterCategory;
-                }).toList();
-              }
+                final matchesSearch = title.contains(_searchQuery);
+                final matchesCategory = _filterCategory == "All" || category == _filterCategory;
+
+                return matchesSearch && matchesCategory;
+              }).toList();
 
               if (quizzes.isEmpty) {
                 return const Center(child: Text("No quizzes found"));
@@ -769,12 +821,22 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
                 itemCount: quizzes.length,
                 itemBuilder: (context, index) {
                   final quiz = quizzes[index];
+                  final data = quiz.data() as Map<String, dynamic>;
+
+                  final title = data["title"] ?? "Untitled Quiz";
+                  final publishDate = data["publishDate"] != null
+                      ? (data["publishDate"] as Timestamp).toDate()
+                      : null;
+
                   return Card(
                     child: ListTile(
                       leading: const Icon(Icons.quiz_outlined),
-                      title: Text(quiz["title"]),
+                      title: Text(title),
                       subtitle: Text(
-                          "Publish: ${quiz["publishDate"].toDate()}"),
+                        publishDate != null
+                            ? "Publish: $publishDate"
+                            : "Publish: Unknown",
+                      ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -784,10 +846,10 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
                               // Load quiz metadata into form
                               setState(() {
                                 _editingQuizId = quiz.id;
-                                _titleController.text = quiz["title"];
-                                _descriptionController.text = quiz["description"];
-                                _publishDate = quiz["publishDate"].toDate();
-                                _selectedCategory = (quiz.data() as Map<String, dynamic>)["category"] ?? "Uncategorized";
+                                _titleController.text = data["title"] ?? "";
+                                _descriptionController.text = data["description"] ?? "";
+                                _publishDate = publishDate;
+                                _selectedCategory = data["category"] ?? "Uncategorized";
                                 _questions.clear();
                               });
 
@@ -805,8 +867,7 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
                                   "question": d["question"],
                                   "type": d["type"],
                                   "allowMultiple": d["allowMultiple"],
-                                  "options":
-                                  List<String>.from(d["options"] ?? []),
+                                  "options": List<String>.from(d["options"] ?? []),
                                   "correctAnswer": d["correctAnswer"],
                                 }));
                               });
@@ -840,7 +901,7 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
   Widget _buildSubmissionsTab() {
     return Column(
       children: [
-        // 🔹 Search + Filter row at top
+        // 🔎 Search + Filter row
         Padding(
           padding: const EdgeInsets.all(16.0),
           child: Row(
@@ -849,270 +910,98 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
                 child: TextField(
                   decoration: const InputDecoration(
                     prefixIcon: Icon(Icons.search),
-                    hintText: "Search submissions...",
+                    hintText: "Search quizzes...",
                     border: OutlineInputBorder(),
                   ),
                   onChanged: (val) {
                     setState(() => _searchQuery = val.toLowerCase());
-                    },
+                  },
                 ),
-    ),
-        const SizedBox(width: 8),
-        DropdownButton<String>(
-          value: _filterCategory,
-          items: ["All", ..._categories].map((c) {
-            return DropdownMenuItem(value: c, child: Text(c));
-          }).toList(),
-          onChanged: (val) {
-            setState(() => _filterCategory = val!);
-            },
+              ),
+              const SizedBox(width: 8),
+              DropdownButton<String>(
+                value: _filterCategory,
+                items: ["All", ..._categories].map((c) {
+                  return DropdownMenuItem(value: c, child: Text(c));
+                }).toList(),
+                onChanged: (val) {
+                  setState(() => _filterCategory = val!);
+                },
+              ),
+            ],
+          ),
         ),
-      ],
-    ),
-  ),
-        // Submission list
+
+        // 🔹 Quiz list
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection("quizzes")
                 .where("mentorId", isEqualTo: widget.mentorId)
-                .where("classId", isEqualTo: widget.classId)
+                .where("sectionId", isEqualTo: widget.sectionId)
                 .where("subjectId", isEqualTo: widget.subjectId)
                 .orderBy("createdAt", descending: true)
                 .snapshots(),
             builder: (context, snapshot) {
               if (!snapshot.hasData) {
-    return const Center(child: CircularProgressIndicator());
-    }
+                return const Center(child: CircularProgressIndicator());
+              }
 
-    var quizzes = snapshot.data!.docs;
-    // ✅ Apply search filter
-    quizzes = quizzes.where((doc) {
-    final title = (doc.data() as Map<String, dynamic>)["title"]?.toString().toLowerCase() ?? "";
-    return title.contains(_searchQuery);
-    }).toList();
+              var quizzes = snapshot.data!.docs;
 
-    // ✅ Apply category filter
-    if (_filterCategory != "All") {
-    quizzes = quizzes.where((doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    return data.containsKey("category") && data["category"] == _filterCategory;
-    }).toList();
-    }
+              // ✅ Apply search filter
+              quizzes = quizzes.where((doc) {
+                final title = (doc.data() as Map<String, dynamic>)["title"]
+                    ?.toString()
+                    .toLowerCase() ??
+                    "";
+                return title.contains(_searchQuery);
+              }).toList();
 
-    if (quizzes.isEmpty) {
-    return const Center(child: Text("No quizzes found"));
-    }
+              // ✅ Apply category filter
+              if (_filterCategory != "All") {
+                quizzes = quizzes.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  return data.containsKey("category") &&
+                      data["category"] == _filterCategory;
+                }).toList();
+              }
 
-    return ListView(
-          children: quizzes.map((quiz) {
+              if (quizzes.isEmpty) {
+                return const Center(child: Text("No quizzes found"));
+              }
 
-          final data = quiz.data() as Map<String, dynamic>;
+              // 🔹 Show quiz list
+              return ListView(
+                children: quizzes.map((quiz) {
+                  final data = quiz.data() as Map<String, dynamic>;
+                  final title = data["title"] ?? "Untitled Quiz";
+                  final publishDate = data["publishDate"] != null
+                      ? (data["publishDate"] as Timestamp).toDate()
+                      : null;
 
-          final title = data["title"] ?? "Untitled Quiz";
-          final publishDate = data["publishDate"] != null
-          ? (data["publishDate"] as Timestamp).toDate(): null;
-
-            return ExpansionTile(
-              leading: const Icon(Icons.quiz),
-              title: Text(title),
-              subtitle: publishDate != null
-                   ? Text("Published: $publishDate")
-                   : const Text("Published: Unknown"),
-
-    children: [
-                // ---Submission Stream ---
-                StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection("quizzes")
-                      .doc(quiz.id)
-                      .collection("submissions")
-                      .orderBy("submittedAt", descending: true)
-                      .snapshots(),
-                  builder: (context, subSnap) {
-                    if (!subSnap.hasData) {
-                      return const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: CircularProgressIndicator(),
-                      );
-                    }
-                    final submissions = subSnap.data!.docs;
-                    if (submissions.isEmpty) {
-                      return const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text("No submissions yet"),
-                      );
-                    }
-
-                    // 📊 Calculate summary
-                    final scores = submissions
-                        .map((s) => (s["score"] ?? 0) as int)
-                        .toList();
-                    final totals = submissions
-                        .map((s) => (s["total"] ?? 0) as int)
-                        .toList();
-
-                    final totalParticipants = submissions.length;
-                    final highest = scores.isNotEmpty ? scores.reduce((a, b) => a > b ? a : b) : 0;
-                    final lowest = scores.isNotEmpty ? scores.reduce((a, b) => a < b ? a : b) : 0;
-                    final average = scores.isNotEmpty
-                        ? (scores.reduce((a, b) => a + b) / scores.length)
-                        : 0;
-
-                    return Column(
-                      children: [
-                        // --- Summary Card with Chart ---
-                        Card(
-                          margin: const EdgeInsets.all(12),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  "📊 Quiz Summary",
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text("👥 Participants: $totalParticipants"),
-                                Text("🏆 Highest Score: $highest"),
-                                Text("📉 Lowest Score: $lowest"),
-                                Text("📊 Average Score: ${average.toStringAsFixed(2)}"),
-                                const SizedBox(height: 20),
-
-                                // --- Bar Chart (distribution) ---
-                                SizedBox(
-                                  height: 200,
-                                  child: BarChart(
-                                    BarChartData(
-                                      alignment: BarChartAlignment.spaceAround,
-                                      maxY: submissions.length.toDouble(),
-                                      barTouchData: BarTouchData(enabled: true),
-                                      titlesData: FlTitlesData(
-                                        leftTitles: AxisTitles(
-                                          sideTitles: SideTitles(
-                                            showTitles: true,
-                                            reservedSize: 28,
-                                          ),
-                                        ),
-                                        bottomTitles: AxisTitles(
-                                          sideTitles: SideTitles(
-                                            showTitles: true,
-                                            getTitlesWidget: (double value, TitleMeta meta) {
-                                              switch (value.toInt()) {
-                                                case 0:
-                                                  return const Text("0-2");
-                                                case 1:
-                                                  return const Text("3-5");
-                                                case 2:
-                                                  return const Text("6-8");
-                                                case 3:
-                                                  return const Text("9-10");
-                                                default:
-                                                  return const Text("");
-                                              }
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                      borderData: FlBorderData(show: false),
-                                      barGroups: [
-                                        BarChartGroupData(
-                                          x: 0,
-                                          barRods: [
-                                            BarChartRodData(
-                                              toY: scores.where((s) => s >= 0 && s <= 2).length.toDouble(),
-                                              color: Colors.redAccent,
-                                              width: 16,
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                          ],
-                                        ),
-                                        BarChartGroupData(
-                                          x: 1,
-                                          barRods: [
-                                            BarChartRodData(
-                                              toY: scores.where((s) => s >= 3 && s <= 5).length.toDouble(),
-                                              color: Colors.orangeAccent,
-                                              width: 16,
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                          ],
-                                        ),
-                                        BarChartGroupData(
-                                          x: 2,
-                                          barRods: [
-                                            BarChartRodData(
-                                              toY: scores.where((s) => s >= 6 && s <= 8).length.toDouble(),
-                                              color: Colors.blueAccent,
-                                              width: 16,
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                          ],
-                                        ),
-                                        BarChartGroupData(
-                                          x: 3,
-                                          barRods: [
-                                            BarChartRodData(
-                                              toY: scores.where((s) => s >= 9 && s <= 10).length.toDouble(),
-                                              color: Colors.green,
-                                              width: 16,
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                  return ListTile(
+                    leading: const Icon(Icons.quiz),
+                    title: Text(title),
+                    subtitle: publishDate != null
+                        ? Text(
+                        "Published: ${publishDate.toLocal().toString().split(" ")[0]}")
+                        : const Text("Published: Unknown"),
+                    trailing: const Icon(Icons.arrow_forward_ios),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => QuizSubmissionsScreen(
+                            quizId: quiz.id,
+                            quizTitle: title,
                           ),
                         ),
-
-                        const Divider(),
-
-                        // --- List of Submissions ---
-                        ...submissions.map((sub) {
-                          return ListTile(
-                            leading: CircleAvatar(
-                              backgroundImage: sub["studentProfileUrl"] != null
-                                  ? NetworkImage(sub["studentProfileUrl"])
-                                  : null,
-                              child: sub["studentProfileUrl"] == null
-                                  ? const Icon(Icons.person)
-                                  : null,
-                            ),
-                            title: Text(sub["studentName"] ?? "Unknown"),
-                            subtitle: Text(
-                              "Score: ${sub["score"] ?? 0}/${sub["total"] ?? 0} • "
-                                  "Submitted at: ${sub["submittedAt"].toDate()}",
-                            ),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => SubmissionDetailScreen(
-                                    quizTitle: quiz["title"],
-                                    submissionId: sub.id,
-                                    quizId: quiz.id,
-                                  ),
-                                ),
-                              );
-                            },
-                          );
-                        }),
-                      ],
-                    );
-                  },
-                ),
-              ],
-            );
-          }).toList(),
-    );
+                      );
+                    },
+                  );
+                }).toList(),
+              );
             },
           ),
         ),
@@ -1120,3 +1009,344 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
     );
   }
 }
+
+class QuizSubmissionsScreen extends StatefulWidget {
+  final String quizId;
+  final String quizTitle;
+
+  const QuizSubmissionsScreen({
+    super.key,
+    required this.quizId,
+    required this.quizTitle,
+  });
+
+  @override
+  State<QuizSubmissionsScreen> createState() => _QuizSubmissionsScreenState();
+}
+
+class _QuizSubmissionsScreenState extends State<QuizSubmissionsScreen> {
+  String _searchQuery = "";
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.quizTitle)),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection("quizzes")
+            .doc(widget.quizId)
+            .collection("submissions")
+            .orderBy("submittedAt", descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final submissions = snapshot.data!.docs;
+
+          if (submissions.isEmpty) {
+            return const Center(child: Text("No submissions yet"));
+          }
+
+          // 📊 Calculate summary
+          final scores = submissions.map((s) => (s["score"] ?? 0) as int).toList();
+          final totals = submissions.map((s) => (s["total"] ?? 0) as int).toList();
+          final highest = scores.isNotEmpty ? scores.reduce((a, b) => a > b ? a : b) : 0;
+          final lowest = scores.isNotEmpty ? scores.reduce((a, b) => a < b ? a : b) : 0;
+          final average = scores.isNotEmpty ? scores.reduce((a, b) => a + b) / scores.length : 0;
+
+          // ✅ Apply search filter
+          final filtered = submissions.where((s) {
+            final name = (s["studentName"] ?? "").toString().toLowerCase();
+            return name.contains(_searchQuery.toLowerCase());
+          }).toList();
+
+          return Column(
+            children: [
+              // --- Summary ---
+              // --- Summary ---
+              InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => QuizStatsDetailScreen(
+                        quizId: widget.quizId,
+                        quizTitle: widget.quizTitle,
+                      ),
+                    ),
+                  );
+                },
+                child: Card(
+                  margin: const EdgeInsets.all(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("📊 Quiz Summary",
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        Text("👥 Participants: ${submissions.length}"),
+                        Text("🏆 Highest Score: $highest"),
+                        Text("📉 Lowest Score: $lowest"),
+                        Text("📊 Average Score: ${average.toStringAsFixed(2)}"),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // --- Search bar ---
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: TextField(
+                  decoration: const InputDecoration(
+                    hintText: "Search student...",
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (val) {
+                    setState(() => _searchQuery = val);
+                  },
+                ),
+              ),
+
+              // --- List of submissions ---
+              Expanded(
+                child: ListView.builder(
+                  itemCount: filtered.length,
+                  itemBuilder: (context, i) {
+                    final sub = filtered[i];
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundImage: sub["studentProfileUrl"] != null
+                            ? NetworkImage(sub["studentProfileUrl"])
+                            : null,
+                        child: sub["studentProfileUrl"] == null
+                            ? const Icon(Icons.person)
+                            : null,
+                      ),
+                      title: Text(sub["studentName"] ?? "Unknown"),
+                      subtitle: Text(
+                        "Score: ${sub["score"] ?? 0}/${sub["total"] ?? 0} • "
+                            "Submitted: ${sub["submittedAt"].toDate()}",
+                      ),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => SubmissionDetailScreen(
+                              quizTitle: widget.quizTitle,
+                              submissionId: sub.id,
+                              quizId: widget.quizId,
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class QuizStatsDetailScreen extends StatefulWidget {
+  final String quizId;
+  final String quizTitle;
+
+  const QuizStatsDetailScreen({
+    super.key,
+    required this.quizId,
+    required this.quizTitle,
+  });
+
+  @override
+  State<QuizStatsDetailScreen> createState() => _QuizStatsDetailScreenState();
+}
+
+class _QuizStatsDetailScreenState extends State<QuizStatsDetailScreen> {
+  String _selectedChart = "Bar Chart"; // default chart type
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text("Stats · ${widget.quizTitle}")),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection("quizzes")
+            .doc(widget.quizId)
+            .collection("submissions")
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final submissions = snapshot.data!.docs;
+          if (submissions.isEmpty) {
+            return const Center(child: Text("No submissions yet"));
+          }
+
+          final scores = submissions.map((s) => (s["score"] ?? 0) as int).toList();
+
+          // Stats
+          final highest = scores.reduce((a, b) => a > b ? a : b);
+          final lowest = scores.reduce((a, b) => a < b ? a : b);
+          final average = scores.reduce((a, b) => a + b) / scores.length;
+
+          // Group counts
+          final group0to2 = scores.where((s) => s >= 0 && s <= 2).length;
+          final group3to5 = scores.where((s) => s >= 3 && s <= 5).length;
+          final group6to8 = scores.where((s) => s >= 6 && s <= 8).length;
+          final group9to10 = scores.where((s) => s >= 9 && s <= 10).length;
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // --- Stats Card ---
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("👥 Participants: ${submissions.length}"),
+                      Text("🏆 Highest: $highest"),
+                      Text("📉 Lowest: $lowest"),
+                      Text("📊 Average: ${average.toStringAsFixed(2)}"),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // --- Dropdown for chart selection ---
+              Row(
+                children: [
+                  const Text("Select Chart: "),
+                  const SizedBox(width: 10),
+                  DropdownButton<String>(
+                    value: _selectedChart,
+                    items: const [
+                      DropdownMenuItem(value: "Bar Chart", child: Text("Bar Chart")),
+                      DropdownMenuItem(value: "Pie Chart", child: Text("Pie Chart")),
+                      DropdownMenuItem(value: "Line Chart", child: Text("Line Chart")),
+                    ],
+                    onChanged: (val) {
+                      setState(() {
+                        _selectedChart = val!;
+                      });
+                    },
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              // --- Render chart based on selection ---
+              SizedBox(
+                height: 300,
+                child: _buildChart(
+                  _selectedChart,
+                  group0to2,
+                  group3to5,
+                  group6to8,
+                  group9to10,
+                  scores,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildChart(
+      String chartType,
+      int group0to2,
+      int group3to5,
+      int group6to8,
+      int group9to10,
+      List<int> scores,
+      ) {
+    switch (chartType) {
+      case "Pie Chart":
+        return PieChart(
+          PieChartData(
+            sections: [
+              PieChartSectionData(value: group0to2.toDouble(), color: Colors.red, title: "0-2"),
+              PieChartSectionData(value: group3to5.toDouble(), color: Colors.orange, title: "3-5"),
+              PieChartSectionData(value: group6to8.toDouble(), color: Colors.blue, title: "6-8"),
+              PieChartSectionData(value: group9to10.toDouble(), color: Colors.green, title: "9-10"),
+            ],
+          ),
+        );
+
+      case "Line Chart":
+        return LineChart(
+          LineChartData(
+            titlesData: FlTitlesData(show: true),
+            borderData: FlBorderData(show: true),
+            lineBarsData: [
+              LineChartBarData(
+                spots: scores.asMap().entries
+                    .map((e) => FlSpot(e.key.toDouble(), e.value.toDouble()))
+                    .toList(),
+                isCurved: true,
+                color: Colors.blue,
+                barWidth: 3,
+              ),
+            ],
+          ),
+        );
+
+      default: // Bar Chart
+        return BarChart(
+          BarChartData(
+            alignment: BarChartAlignment.spaceAround,
+            maxY: (scores.length.toDouble() + 1),
+            titlesData: FlTitlesData(
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  getTitlesWidget: (value, meta) {
+                    switch (value.toInt()) {
+                      case 0: return const Text("0-2");
+                      case 1: return const Text("3-5");
+                      case 2: return const Text("6-8");
+                      case 3: return const Text("9-10");
+                    }
+                    return const Text("");
+                  },
+                ),
+              ),
+            ),
+            barGroups: [
+              BarChartGroupData(x: 0, barRods: [
+                BarChartRodData(toY: group0to2.toDouble(), color: Colors.redAccent),
+              ]),
+              BarChartGroupData(x: 1, barRods: [
+                BarChartRodData(toY: group3to5.toDouble(), color: Colors.orangeAccent),
+              ]),
+              BarChartGroupData(x: 2, barRods: [
+                BarChartRodData(toY: group6to8.toDouble(), color: Colors.blueAccent),
+              ]),
+              BarChartGroupData(x: 3, barRods: [
+                BarChartRodData(toY: group9to10.toDouble(), color: Colors.green),
+              ]),
+            ],
+          ),
+        );
+    }
+  }
+}
+

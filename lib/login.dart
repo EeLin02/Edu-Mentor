@@ -49,29 +49,14 @@ class _LoginScreenState extends State<LoginScreen> {
       await fcm.requestPermission();
       final token = await fcm.getToken();
 
-      if (claims['admin'] == true) {
-        if (token != null) {
-          await FirebaseFirestore.instance.collection('admins').doc(user.uid).set(
-            {'fcmToken': token},
-            SetOptions(merge: true),
-          );
-        }
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => AdminDashboard()),
-        );
-      } else if (email.endsWith("@newinti.edu.my")) {
-        if (token != null) {
-          await FirebaseFirestore.instance.collection('mentors').doc(user.uid).set(
-            {'fcmToken': token},
-            SetOptions(merge: true),
-          );
-        }
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => MentorDashboard()),
-        );
-      } else if (email.endsWith("@student.newinti.edu.my")) {
+      // 🔹 Check role by looking at Firestore collections
+      final userDocStudent = await FirebaseFirestore.instance
+          .collection('students')
+          .doc(user.uid)
+          .get();
+
+      if (userDocStudent.exists) {
+        // Student role
         if (token != null) {
           await FirebaseFirestore.instance.collection('students').doc(user.uid).set(
             {'fcmToken': token},
@@ -82,13 +67,58 @@ class _LoginScreenState extends State<LoginScreen> {
           context,
           MaterialPageRoute(builder: (context) => StudentDashboard()),
         );
-      } else {
-        _showError("Unauthorized email domain");
+        return;
       }
+
+      final userDocMentor = await FirebaseFirestore.instance
+          .collection('mentors')
+          .doc(user.uid)
+          .get();
+
+      if (userDocMentor.exists) {
+        // Mentor role
+        if (token != null) {
+          await FirebaseFirestore.instance.collection('mentors').doc(user.uid).set(
+            {'fcmToken': token},
+            SetOptions(merge: true),
+          );
+        }
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => MentorDashboard()),
+        );
+        return;
+      }
+
+      final userDocAdmin = await FirebaseFirestore.instance
+          .collection('admins')
+          .doc(user.uid)
+          .get();
+
+      if (userDocAdmin.exists) {
+        // Admin role
+        if (token != null) {
+          await FirebaseFirestore.instance.collection('admins').doc(user.uid).set(
+            {'fcmToken': token},
+            SetOptions(merge: true),
+          );
+        }
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => AdminDashboard()),
+        );
+        return;
+      }
+
+      // ❌ No role assigned
+      _showError("No valid role assigned.");
     } on FirebaseAuthException catch (e) {
-      _showError(e.message ?? "Login failed");
+      _showError(e.message ?? "Authentication error");
+    } catch (e) {
+      _showError("Something went wrong: $e");
     }
   }
+
 
   void _showError(String message) {
     showDialog(

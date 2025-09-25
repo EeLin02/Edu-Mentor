@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -25,6 +24,15 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   String? selectedRole;
+  String? selectedSchool;
+  String? selectedProgramme; // for student
+  String generateMentorId(String uid) {
+    // Example: M + first 8 chars of UID
+    return "M${uid.substring(0, 8).toUpperCase()}";
+  }
+
+  List<String> selectedProgrammeIds = []; // for mentor multiple programmes
+
   File? pickedFile;
   String fileName = '';
   PhoneNumber number = PhoneNumber(isoCode: 'MY');
@@ -34,11 +42,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   @override
   void initState() {
     super.initState();
-
-    // Synchronize studentIdController with emailController only when role is Student
+    // Keep studentIdController in sync with email username
     emailController.addListener(() {
       if (selectedRole == 'Student') {
-        // Update studentIdController text with the emailController text
         final emailText = emailController.text;
         if (studentIdController.text != emailText) {
           studentIdController.text = emailText;
@@ -59,9 +65,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               title: Text("Pick Image"),
               onTap: () async {
                 Navigator.pop(context);
-                final result = await FilePicker.platform.pickFiles(
-                  type: FileType.image,
-                );
+                final result = await FilePicker.platform.pickFiles(type: FileType.image);
                 if (result != null && result.files.single.path != null) {
                   setState(() {
                     pickedFile = File(result.files.single.path!);
@@ -115,17 +119,27 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     if (selectedRole == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Please select a role")),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Please select a role")));
+      return;
+    }
+
+    if (selectedRole == 'Student' && selectedProgramme == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Please select a programme")));
+      return;
+    }
+
+    if (selectedRole == 'Mentor' && selectedProgrammeIds.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Please select at least one programme")));
       return;
     }
 
     if (selectedRole == 'Student' &&
         await checkStudentIdExists(studentIdController.text.trim())) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Student ID already exists")),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Student ID already exists")));
       return;
     }
 
@@ -135,8 +149,11 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       final UserCredential userCredential =
       await _auth.createUserWithEmailAndPassword(
         email: fullEmail,
-        password: passwordController.text.trim(),
+        password: "Temp@123", // temporary password
       );
+
+      // Immediately send password reset email
+      await _auth.sendPasswordResetEmail(email: fullEmail);
 
       String? fileUrl;
       if (pickedFile != null) {
@@ -147,17 +164,28 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         fileUrl = await ref.getDownloadURL();
       }
 
-      final userData = {
+      final Map<String, dynamic> userData = {
+        'uid': userCredential.user!.uid,
         'name': nameController.text.trim(),
         'email': fullEmail,
         'phone': phoneNumber,
         'role': selectedRole,
+        'schoolId': selectedSchool,
+        'disabled': false,
         if (fileUrl != null) 'fileUrl': fileUrl,
-        if (selectedRole == 'Student')
-          'studentIdNo': studentIdController.text.trim(),
       };
 
-      final collectionName = selectedRole == 'Student' ? 'students' : 'mentors';
+      if (selectedRole == 'Student') {
+        userData['programmeId'] = selectedProgramme;
+        userData['studentIdNo'] = studentIdController.text.trim();
+      } else if (selectedRole == 'Mentor') {
+        userData['programmeIds'] = selectedProgrammeIds;
+        userData['mentorIdNo'] = generateMentorId(userCredential.user!.uid);
+      }
+
+
+      final collectionName =
+      selectedRole == 'Student' ? 'students' : 'mentors';
 
       await _firestore
           .collection(collectionName)
@@ -168,7 +196,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         SnackBar(content: Text("Account created successfully")),
       );
 
-      // Clear form for next entry (do NOT pop screen)
+      // Reset form
       _formKey.currentState!.reset();
       nameController.clear();
       emailController.clear();
@@ -179,19 +207,199 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         pickedFile = null;
         fileName = '';
         selectedRole = null;
+        selectedSchool = null;
+        selectedProgramme = null;
+        selectedProgrammeIds = [];
         phoneNumber = '';
         isPhoneValid = false;
       });
     } on FirebaseAuthException catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? 'Firebase error')),
-      );
+          SnackBar(content: Text(e.message ?? 'Firebase error')));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error: $e")));
     }
   }
+
+
+  // Function to open searchable school selection
+  void openSchoolSelectionDialog(List<QueryDocumentSnapshot> schools) async {
+    final selectedId = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        String? tempSelected = selectedSchool;
+        List<QueryDocumentSnapshot> filteredSchools = List.from(schools);
+
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: Text("Select School"),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 400,
+                child: Column(
+                  children: [
+                    TextField(
+                      decoration: InputDecoration(
+                        labelText: "Search schools",
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) {
+                        setStateDialog(() {
+                          filteredSchools = schools
+                              .where((doc) => doc['name']
+                              .toString()
+                              .toLowerCase()
+                              .contains(value.toLowerCase()))
+                              .toList();
+                        });
+                      },
+                    ),
+                    SizedBox(height: 10),
+                    Expanded(
+                      child: ListView(
+                        children: filteredSchools.map((doc) {
+                          return RadioListTile<String>(
+                            title: Text(doc['name']),
+                            value: doc.id,
+                            groupValue: tempSelected,
+                            onChanged: (val) {
+                              setStateDialog(() {
+                                tempSelected = val;
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, null),
+                  child: Text("Cancel"),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, tempSelected),
+                  child: Text("Select"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (selectedId != null) {
+      setState(() {
+        selectedSchool = selectedId;
+        selectedProgramme = null;
+        selectedProgrammeIds = [];
+      });
+    }
+  }
+
+// Function to open programme selection dialog (for both students and mentors)
+  void openProgrammeSelectionDialog(List<QueryDocumentSnapshot> progs, {bool multiple = false}) async {
+    final selectedIds = await showDialog<List<String>>(
+      context: context,
+      builder: (context) {
+        List<String> tempSelected = multiple ? List.from(selectedProgrammeIds) : [];
+        List<QueryDocumentSnapshot> filteredProgs = List.from(progs);
+
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: Text("Select Programme${multiple ? 's' : ''}"),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 450,
+                child: Column(
+                  children: [
+                    TextField(
+                      decoration: InputDecoration(
+                        labelText: "Search programmes",
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) {
+                        setStateDialog(() {
+                          filteredProgs = progs
+                              .where((doc) => doc['name']
+                              .toString()
+                              .toLowerCase()
+                              .contains(value.toLowerCase()))
+                              .toList();
+                        });
+                      },
+                    ),
+                    SizedBox(height: 10),
+                    Expanded(
+                      child: ListView(
+                        children: filteredProgs.map((doc) {
+                          final id = doc.id;
+                          final name = doc['name'];
+                          if (multiple) {
+                            return CheckboxListTile(
+                              title: Text(name),
+                              value: tempSelected.contains(id),
+                              onChanged: (bool? value) {
+                                setStateDialog(() {
+                                  if (value == true) tempSelected.add(id);
+                                  else tempSelected.remove(id);
+                                });
+                              },
+                            );
+                          } else {
+                            return RadioListTile<String>(
+                              title: Text(name),
+                              value: id,
+                              groupValue: tempSelected.isEmpty ? null : tempSelected.first,
+                              onChanged: (val) {
+                                setStateDialog(() {
+                                  tempSelected = [val!];
+                                });
+                              },
+                            );
+                          }
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, null),
+                  child: Text("Cancel"),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, tempSelected),
+                  child: Text("Select"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (selectedIds != null) {
+      setState(() {
+        if (multiple) {
+          selectedProgrammeIds = selectedIds;
+        } else {
+          selectedProgramme = selectedIds.first;
+        }
+      });
+    }
+  }
+
+
+
 
   Widget buildPhoneInput() {
     return Column(
@@ -208,9 +416,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               isPhoneValid = isValid;
             });
           },
-          selectorConfig: SelectorConfig(
-            selectorType: PhoneInputSelectorType.DROPDOWN,
-          ),
+          selectorConfig: SelectorConfig(selectorType: PhoneInputSelectorType.DROPDOWN),
           ignoreBlank: false,
           autoValidateMode: AutovalidateMode.onUserInteraction,
           initialValue: number,
@@ -235,7 +441,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
   String? validateStudentId(String? value) {
     if (value == null || value.isEmpty) return 'Enter student ID';
-    // Regex for letter(s) followed by digits, e.g. P23015080
     final pattern = RegExp(r'^[A-Za-z]{1}[0-9]{8}$');
     if (!pattern.hasMatch(value)) return 'Student ID format: P + 8 digits';
     return null;
@@ -254,10 +459,11 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               TextFormField(
                 controller: nameController,
                 decoration: InputDecoration(labelText: "Name"),
-                validator: (value) =>
-                value!.isEmpty ? 'Enter your name' : null,
+                validator: (value) => value!.isEmpty ? 'Enter your name' : null,
               ),
               SizedBox(height: 10),
+
+              // Email username
               TextFormField(
                 controller: emailController,
                 decoration: InputDecoration(
@@ -271,14 +477,15 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 validator: (value) {
                   if (value == null || value.isEmpty) return 'Enter your email username';
                   final fullEmail = getFullEmail(value);
-                  if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w]{2,4}$')
-                      .hasMatch(fullEmail)) {
+                  if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w]{2,4}$').hasMatch(fullEmail)) {
                     return 'Enter a valid email';
                   }
                   return null;
                 },
               ),
               SizedBox(height: 10),
+
+              // Student ID
               if (selectedRole == 'Student')
                 TextFormField(
                   controller: studentIdController,
@@ -286,42 +493,133 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   validator: validateStudentId,
                 ),
               SizedBox(height: 10),
+
+              // Password
               TextFormField(
                 controller: passwordController,
                 decoration: InputDecoration(labelText: "Password"),
                 obscureText: true,
-                validator: (value) => value!.length < 6
-                    ? 'Password must be at least 6 characters'
-                    : null,
+                validator: (value) =>
+                value!.length < 6 ? 'Password must be at least 6 characters' : null,
               ),
               SizedBox(height: 10),
+
+              // Role
               DropdownButtonFormField<String>(
                 decoration: InputDecoration(labelText: "Role"),
-                items: ['Student', 'Mentor'].map((role) {
-                  return DropdownMenuItem(value: role, child: Text(role));
-                }).toList(),
+                items: ['Student', 'Mentor']
+                    .map((role) => DropdownMenuItem(value: role, child: Text(role)))
+                    .toList(),
                 value: selectedRole,
                 onChanged: (value) {
                   setState(() {
                     selectedRole = value;
                     emailController.clear();
                     studentIdController.clear();
+                    selectedSchool = null;
+                    selectedProgramme = null;
+                    selectedProgrammeIds = [];
                   });
                 },
-                validator: (value) =>
-                value == null ? 'Please select a role' : null,
+                validator: (value) => value == null ? 'Please select a role' : null,
               ),
               SizedBox(height: 10),
+
+              // School selection button
+              if (selectedRole != null)
+                StreamBuilder<QuerySnapshot>(
+                  stream: _firestore.collection('schools').orderBy('name').snapshots(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) return CircularProgressIndicator();
+                    final schools = snapshot.data!.docs;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Select School"),
+                        SizedBox(height: 8),
+                        ElevatedButton(
+                          onPressed: () => openSchoolSelectionDialog(schools),
+                          child: Text(
+                            selectedSchool == null
+                                ? "Select School"
+                                : schools.firstWhere((s) => s.id == selectedSchool)['name'],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+
+// Programme selection for student
+              if (selectedRole == 'Student' && selectedSchool != null)
+                StreamBuilder<QuerySnapshot>(
+                  stream: _firestore
+                      .collection('schools')
+                      .doc(selectedSchool)
+                      .collection('programmes')
+                      .orderBy('name')
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) return CircularProgressIndicator();
+                    final progs = snapshot.data!.docs;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Select Programme"),
+                        SizedBox(height: 8),
+                        ElevatedButton(
+                          onPressed: () => openProgrammeSelectionDialog(progs),
+                          child: Text(selectedProgramme == null
+                              ? "Select Programme"
+                              : progs.firstWhere((p) => p.id == selectedProgramme)['name']),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+
+// Programme selection for mentor (multiple)
+              if (selectedRole == 'Mentor' && selectedSchool != null)
+                StreamBuilder<QuerySnapshot>(
+                  stream: _firestore
+                      .collection('schools')
+                      .doc(selectedSchool)
+                      .collection('programmes')
+                      .orderBy('name')
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) return CircularProgressIndicator();
+                    final progs = snapshot.data!.docs;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Select Programmes"),
+                        SizedBox(height: 8),
+                        ElevatedButton(
+                          onPressed: () => openProgrammeSelectionDialog(progs, multiple: true),
+                          child: Text(
+                            selectedProgrammeIds.isEmpty
+                                ? "Select Programmes"
+                                : "${selectedProgrammeIds.length} programmes selected",
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+
+              SizedBox(height: 10),
+
               buildPhoneInput(),
               SizedBox(height: 10),
+
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: pickFile,
                       icon: Icon(Icons.upload_file),
-                      label:
-                      Text(fileName.isEmpty ? "Upload ID File" : fileName),
+                      label: Text(fileName.isEmpty ? "Upload ID File" : fileName),
                     ),
                   ),
                   if (pickedFile != null)
@@ -333,11 +631,11 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           fileName = '';
                         });
                       },
-                      tooltip: 'Remove File',
                     ),
                 ],
               ),
               SizedBox(height: 20),
+
               ElevatedButton(
                 onPressed: createAccount,
                 style: ElevatedButton.styleFrom(

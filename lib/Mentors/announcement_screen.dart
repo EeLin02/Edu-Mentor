@@ -59,8 +59,8 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
       DocumentSnapshot doc,
       String subjectId,
       String subjectName,
-      String classId,
-      String className,
+      String sectionId,
+      String sectionName,
       Color color,
       ) {
     final data = doc.data() as Map<String, dynamic>;
@@ -71,8 +71,8 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
       arguments: {
         'subjectId': subjectId,
         'subjectName': subjectName,
-        'classId': classId,
-        'className': className,
+        'sectionId': sectionId,
+        'sectionName': sectionName,
         'announcementId': doc.id,
         'title': data['title'],
         'description': data['description'],
@@ -89,7 +89,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
   Widget build(BuildContext context) {
     final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
     final String subjectName = args['subjectName'];
-    final String className = args['className'];
+    final String sectionName = args['sectionName'];
     final Color color = args['color'] ?? Colors.teal;
     // Compute text color based on background brightness
     final bool isLight = color.computeLuminance() > 0.5;
@@ -97,14 +97,14 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Announcements · $subjectName - $className', style: TextStyle(color: textColor)),
+        title: Text('Announcements · $subjectName - $sectionName', style: TextStyle(color: textColor)),
         backgroundColor: color,
         foregroundColor: textColor, // Also set icon colors etc.
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _announcementsCollection
             .where('subjectName', isEqualTo: subjectName)
-            .where('className', isEqualTo: className)
+            .where('sectionName', isEqualTo: sectionName)
             .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
@@ -158,8 +158,8 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                               builder: (_) => CreateAnnouncementScreen(
                                 subjectId: args['subjectId'] ?? '',
                                 subjectName: subjectName,
-                                classId: args['classId'] ?? '',
-                                className: className,
+                                sectionId: args['sectionId'] ?? '',
+                                sectionName: sectionName,
                                 announcementId: doc.id,
                                 title: data['title'],
                                 description: data['description'],
@@ -203,8 +203,8 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
             arguments: {
               'subjectId': args['subjectId'],
               'subjectName': subjectName,
-              'classId': args['classId'],
-              'className': className,
+              'sectionId': args['sectionId'],
+              'sectionName': sectionName,
               'color': color,
             },
           );

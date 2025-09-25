@@ -8,6 +8,8 @@ import 'Admin/system_structure_screen.dart';
 import 'Admin/notice_board_screen.dart';
 import 'Admin/manage_accounts_screen.dart';
 import 'Admin/manage_notice_screen.dart';
+import 'Admin/enrollment_requests_screen.dart';
+
 import 'settings_screen.dart';
 import 'login.dart';
 
@@ -221,13 +223,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 _buildMenuTile(Icons.person_add, "Create Account",
                     "Register students and mentors", () => _navigate(CreateAccountScreen()), iconColor, textColor, subtitleColor),
                 _buildMenuTile(Icons.people, "Manage Accounts",
-                    "View, edit, and delete users", () => _navigate(ManageAccountsScreen()), iconColor, textColor, subtitleColor),
+                    "View, edit, and disable users", () => _navigate(ManageAccountsScreen()), iconColor, textColor, subtitleColor),
                 _buildMenuTile(Icons.school, "System Structure",
                     "Manage departments, classes & subjects", () => _navigate(SystemStructureScreen()), iconColor, textColor, subtitleColor),
                 _buildMenuTile(Icons.announcement, "Notice Board",
                     "Publish announcements & updates", () => _navigate(NoticeBoardScreen()), iconColor, textColor, subtitleColor),
                 _buildMenuTile(Icons.announcement_outlined, "Manage Notices",
                     "View, edit, or delete posted notices", () => _navigate(ManageNoticesScreen()), iconColor, textColor, subtitleColor),
+                _buildMenuTile(Icons.request_page, "Enrollment Requests",
+                    "Approve or reject subject enrollment requests", () => _navigate(EnrollmentRequestsScreen()), iconColor, textColor, subtitleColor),
               ],
             ),
           ),

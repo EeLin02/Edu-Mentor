@@ -4,20 +4,20 @@ import 'attendance_records_screen.dart';
 
 class TakeAttendanceScreen extends StatefulWidget {
   final String subjectId;
-  final String classId;
+  final String sectionId;
   final String mentorId;
   final String subjectName;
-  final String className;
+  final String sectionName;
   final Color? color;
   final DateTime? initialDate;
 
   const TakeAttendanceScreen({
     Key? key,
     required this.subjectId,
-    required this.classId,
+    required this.sectionId,
     required this.mentorId,
     required this.subjectName,
-    required this.className,
+    required this.sectionName,
     this.color,
     this.initialDate,
   }) : super(key: key);
@@ -50,7 +50,7 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
       final enrollments = await _firestore
           .collection('subjectEnrollments')
           .where('subjectId', isEqualTo: widget.subjectId)
-          .where('classId', isEqualTo: widget.classId)
+          .where('sectionId', isEqualTo: widget.sectionId)
           .get();
 
       final ids = enrollments.docs.map((e) => e['studentId'] as String).toList();
@@ -61,8 +61,8 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
         if (doc.exists) {
           students.add({
             'id': id,
-            'name': doc['name'] ?? 'Unnamed',
-            'photo': doc['profileUrl'] ?? '',
+            'name': doc.data()?['name'] ?? 'Unnamed',
+            'photo': doc.data()?['profileUrl'] ?? '',
           });
         }
       }
@@ -70,7 +70,7 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
       final dateStr = selectedDate.toIso8601String().split('T')[0];
       final attendanceDoc = await _firestore
           .collection('attendance')
-          .doc(widget.classId)
+          .doc(widget.sectionId)
           .collection(widget.subjectId)
           .doc(dateStr)
           .get();
@@ -110,7 +110,7 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
     final dateStr = selectedDate.toIso8601String().split('T')[0];
     final docRef = _firestore
         .collection('attendance')
-        .doc(widget.classId)
+        .doc(widget.sectionId)
         .collection(widget.subjectId)
         .doc(dateStr);
 
@@ -148,9 +148,9 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
     final today = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: selectedDate,
-      firstDate: _isEditMode ? DateTime(2000) : today,
-      lastDate: DateTime(2100),
+      initialDate: selectedDate.isAfter(today) ? today : selectedDate,
+      firstDate: DateTime(2000),
+      lastDate: today, //  restricts to today & past only
     );
 
     if (picked != null && picked != selectedDate) {
@@ -162,6 +162,7 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
     }
   }
 
+
   @override
   Widget build(BuildContext context) {
     final appBarColor = widget.color ?? Colors.teal;
@@ -171,7 +172,7 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          '${_isEditMode ? 'Edit' : 'Take'} Attendance · ${widget.subjectName} - ${widget.className}',
+          '${_isEditMode ? 'Edit' : 'Take'} Attendance · ${widget.subjectName} - ${widget.sectionName}',
         ),
         backgroundColor: appBarColor,
         foregroundColor: textColor,
@@ -341,11 +342,11 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
             context,
             MaterialPageRoute(
               builder: (_) => AttendanceRecordsScreen(
-                classId: widget.classId,
+                sectionId: widget.sectionId,
                 subjectId: widget.subjectId,
                 mentorId: widget.mentorId,
                 subjectName: widget.subjectName,
-                className: widget.className,
+                sectionName: widget.sectionName,
                 color: widget.color ?? Colors.teal,
               ),
             ),

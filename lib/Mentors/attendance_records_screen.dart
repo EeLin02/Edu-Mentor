@@ -4,20 +4,20 @@ import 'package:intl/intl.dart';
 import 'take_attendance_screen.dart';
 
 class AttendanceRecordsScreen extends StatefulWidget {
-  final String classId;
+  final String sectionId;
   final String subjectId;
   final String mentorId;
   final String subjectName;
-  final String className;
+  final String sectionName;
   final Color color;
 
   const AttendanceRecordsScreen({
     super.key,
-    required this.classId,
+    required this.sectionId,
     required this.subjectId,
     required this.mentorId,
     required this.subjectName,
-    required this.className,
+    required this.sectionName,
     required this.color,
   });
 
@@ -72,12 +72,12 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
 
     final attendanceRef = FirebaseFirestore.instance
         .collection('attendance')
-        .doc(widget.classId)
+        .doc(widget.sectionId)
         .collection(widget.subjectId);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text("Attendance · ${widget.subjectName} - ${widget.className}"),
+        title: Text("Attendance · ${widget.subjectName} - ${widget.sectionName}"),
         backgroundColor: appBarColor,
         foregroundColor: textColor,
       ),
@@ -236,11 +236,11 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                             context,
                             MaterialPageRoute(
                               builder: (_) => TakeAttendanceScreen(
-                                classId: widget.classId,
+                                sectionId: widget.sectionId,
                                 subjectId: widget.subjectId,
                                 mentorId: widget.mentorId,
                                 subjectName: widget.subjectName,
-                                className: widget.className,
+                                sectionName: widget.sectionName,
                                 color: widget.color,
                                 initialDate: DateTime.parse(dateStr),
                               ),

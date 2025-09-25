@@ -184,7 +184,7 @@ class MyApp extends StatelessWidget {
     final themeNotifier = Provider.of<ThemeNotifier>(context);
 
     return MaterialApp(
-      title: 'Mentor Link',
+      title: 'Edu Mentor',
       debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey,
       theme: themeNotifier.isDarkMode ? ThemeData.dark() : ThemeData.light(),
@@ -207,8 +207,8 @@ class MyApp extends StatelessWidget {
           return CreateAnnouncementScreen(
             subjectId: args['subjectId'],
             subjectName: args['subjectName'],
-            classId: args['classId'],
-            className: args['className'],
+            sectionId: args['sectionId'],
+            sectionName: args['sectionName'],
             color: args['color'],
             announcementId: args['announcementId'],
             title: args['title'],
@@ -227,10 +227,10 @@ class MyApp extends StatelessWidget {
 
           if (args == null ||
               args['subjectId'] == null ||
-              args['classId'] == null ||
+              args['sectionId'] == null ||
               args['mentorId'] == null ||
               args['subjectName'] == null ||
-              args['className'] == null) {
+              args['sectionName'] == null) {
             return const Scaffold(
               body: Center(child: Text("Missing arguments for ClassChatScreen")),
             );
@@ -238,10 +238,10 @@ class MyApp extends StatelessWidget {
 
           return ClassChatScreen(
             subjectId: args['subjectId'] as String,
-            classId: args['classId'] as String,
+            sectionId: args['sectionId'] as String,
             mentorId: args['mentorId'] as String,
             subjectName: args['subjectName'] as String,
-            className: args['className'] as String,
+            sectionName: args['sectionName'] as String,
             color: args['color'] as Color?, // Can be null
           );
         },
@@ -258,10 +258,10 @@ class MyApp extends StatelessWidget {
           final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
           return StudentClassChatScreen(
             subjectId: args['subjectId'],
-            classId: args['classId'],
+            sectionId: args['sectionId'],
             mentorId: args['mentorId'],
             subjectName: args['subjectName'],
-            className: args['className'],
+            sectionName: args['sectionName'],
             color: args['color'],
           );
         },
@@ -272,17 +272,19 @@ class MyApp extends StatelessWidget {
         '/createResource': (context) {
           final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
           return CreateResourceScreen(
-            subjectName: args['subjectName'],
-            className: args['className'],
+            subjectId: args['subjectId'] ?? '',
+            sectionId: args['sectionId'] ?? '',
+            subjectName: args['subjectName'] ?? '',
+            sectionName: args['sectionName'] ?? '',
             color: args['color'],
             resourceId: args['resourceId'],
-            title: args['title'],
-            description: args['description'],
-            category: args['category'],
+            title: args['title']?.toString(),
+            description: args['description']?.toString(),
+            category: args['category']?.toString(),
             links: args['links'] != null ? List<String>.from(args['links']) : [],
-            // Add other arguments as needed
           );
         },
+
         '/PreviewResourceScreen': (context) {
           final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
           return PreviewAnnouncementScreen(data: args['data'],color: args['color'],);
@@ -292,10 +294,10 @@ class MyApp extends StatelessWidget {
           final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
           return TakeAttendanceScreen(
             subjectId: args['subjectId'],
-            classId: args['classId'],
+            sectionId: args['sectionId'],
             mentorId: args['mentorId'],
             subjectName: args['subjectName'],
-            className: args['className'],
+            sectionName: args['sectionName'],
             color: args['color'],
           );
         },
@@ -305,10 +307,10 @@ class MyApp extends StatelessWidget {
 
           return WeeklyQuizScreen(
             subjectId: args['subjectId'],
-            classId: args['classId'],
+            sectionId: args['sectionId'],
             mentorId: args['mentorId'],
             subjectName: args['subjectName'],
-            className: args['className'],
+            sectionName: args['sectionName'],
             color: args['color'],
           );
         },
@@ -319,7 +321,7 @@ class MyApp extends StatelessWidget {
 
           if (args is Map<String, dynamic>) {
             return StudentAttendanceRecordsScreen(
-              classId: args['classId'] ?? '',
+              sectionId: args['sectionId'] ?? '',
               subjectId: args['subjectId'] ?? '',
               studentId: args['studentId'] ?? '',
               color: args['color'] ?? Colors.blue, // fallback color
@@ -353,7 +355,7 @@ class MyApp extends StatelessWidget {
         '/studentQuizzes': (context) {
           final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
           return StudentQuizzesScreen(
-            classId: args['classId'],
+            sectionId: args['sectionId'],
             subjectId: args['subjectId'],
             studentId: args['studentId'],
             color: args['color'],
@@ -364,7 +366,7 @@ class MyApp extends StatelessWidget {
           return TakeQuizScreen(
             quizId: args['quizId'],
             studentId: args['studentId'],
-            classId: args['classId'],
+            sectionId: args['sectionId'],
             subjectId: args['subjectId'],
             color: args['color'],
             title: args['title'],

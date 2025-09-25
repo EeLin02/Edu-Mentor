@@ -8,8 +8,10 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:path/path.dart' as path;
 
 class CreateResourceScreen extends StatefulWidget {
+  final String subjectId;
+  final String sectionId;
   final String subjectName;
-  final String className;
+  final String sectionName;
   final String? resourceId;
   final String? title;
   final String? category;
@@ -19,8 +21,10 @@ class CreateResourceScreen extends StatefulWidget {
 
   const CreateResourceScreen({
     Key? key,
+    required this.subjectId,
+    required this.sectionId,
     required this.subjectName,
-    required this.className,
+    required this.sectionName,
     this.resourceId,
     this.title,
     this.category,
@@ -73,42 +77,51 @@ class _CreateResourceScreenState extends State<CreateResourceScreen> {
 
     if (doc.exists) {
       final data = doc.data()!;
+      print("Resource Data: $data");
+
       setState(() {
-        _titleController.text = data['title'] ?? '';
-        _descriptionController.text = data['description'] ?? '';
+        _titleController.text = data['title']?.toString() ?? '';
+        _descriptionController.text = data['description']?.toString() ?? '';
 
-        // Load saved files & external links
-        _uploadedFileUrls = List<String>.from(data['files'] ?? []);
-        _externalLinks = List<String>.from(data['externalLinks'] ?? []);
+        _uploadedFileUrls = (data['files'] as List<dynamic>?)
+            ?.map((e) => e?.toString() ?? '')
+            .where((e) => e.isNotEmpty)
+            .toList()
+            ?? [];
 
-        _selectedCategory = data['category'];
+        _externalLinks = (data['externalLinks'] as List<dynamic>?)
+            ?.map((e) => e?.toString() ?? '')
+            .where((e) => e.isNotEmpty)
+            .toList()
+            ?? [];
+
+        _selectedCategory = data['category']?.toString();
       });
+
+
     }
   }
-
-
 
   Future<void> _fetchCategories() async {
     final snapshot = await FirebaseFirestore.instance
         .collection('resource_categories')
-        .doc('${widget.className}_${widget.subjectName}')
+        .doc('${widget.sectionId}_${widget.subjectId}')
         .get();
 
     if (snapshot.exists) {
       final data = snapshot.data();
-      final List<String> categories = List<String>.from(data?['categories'] ?? []);
-      setState(() {
-        _allCategories = categories;
-      });
+      if (data != null && data['categories'] is List) {
+        setState(() {
+          _allCategories = (data['categories'] as List).map((e) => e.toString()).toList();
+        });
+      }
     }
   }
-
-
 
   void _loadCategories() async {
     final doc = await FirebaseFirestore.instance
         .collection('resource_categories')
-        .doc('${widget.className}_${widget.subjectName}')
+        .doc('${widget.sectionId}_${widget.subjectId}')
         .get();
 
     if (doc.exists) {
@@ -144,7 +157,7 @@ class _CreateResourceScreenState extends State<CreateResourceScreen> {
     if (newName != null && newName.isNotEmpty && newName != oldName) {
       final docRef = FirebaseFirestore.instance
           .collection('resource_categories')
-          .doc('${widget.className}_${widget.subjectName}');
+          .doc('${widget.sectionId}_${widget.subjectId}');
 
       await docRef.update({
         'categories': FieldValue.arrayRemove([oldName])
@@ -180,7 +193,7 @@ class _CreateResourceScreenState extends State<CreateResourceScreen> {
     if (confirm == true) {
       final docRef = FirebaseFirestore.instance
           .collection('resource_categories')
-          .doc('${widget.className}_${widget.subjectName}');
+          .doc('${widget.sectionId}_${widget.subjectId}');
 
       await docRef.update({
         'categories': FieldValue.arrayRemove([name])
@@ -257,7 +270,7 @@ class _CreateResourceScreenState extends State<CreateResourceScreen> {
       for (var file in _selectedFiles) {
         final uniqueFileName = '${DateTime.now().millisecondsSinceEpoch}_${path.basename(file.path!)}';
         final ref = FirebaseStorage.instance.ref(
-          'resources/${widget.subjectName}_${widget.className}/$uniqueFileName',
+          'resources/${widget.subjectName}_${widget.sectionName}/$uniqueFileName',
         );
         final uploadTask = await ref.putFile(File(file.path!));
         final url = await uploadTask.ref.getDownloadURL();
@@ -265,8 +278,10 @@ class _CreateResourceScreenState extends State<CreateResourceScreen> {
       }
 
       final data = {
+        'subjectId': widget.subjectId,
+        'sectionId': widget.sectionId,
         'subjectName': widget.subjectName,
-        'className': widget.className,
+        'sectionName': widget.sectionName,
         'title': title,
         'description': _descriptionController.text.trim(),
         'category': category,
@@ -328,7 +343,7 @@ class _CreateResourceScreenState extends State<CreateResourceScreen> {
     if (result != null && result.isNotEmpty) {
       final categoryRef = FirebaseFirestore.instance
           .collection('resource_categories')
-          .doc('${widget.className}_${widget.subjectName}');
+          .doc('${widget.sectionId}_${widget.subjectId}');
 
       await categoryRef.set({
         'categories': FieldValue.arrayUnion([result])

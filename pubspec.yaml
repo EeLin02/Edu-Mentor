@@ -44,7 +44,7 @@ dependencies:
   emoji_picker_flutter: ^4.3.0
   foundation: ^0.0.5
   fl_chart: ^0.70.0
-
+  dropdown_search: ^5.0.6
 
 
 

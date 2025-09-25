@@ -81,7 +81,7 @@ class _StudentNotesDetailScreen extends State<StudentNotesDetailScreen> {
               externalLinks: widget.data['externalLinks'] as List? ?? [],
               postedTimestamp: widget.data['timestamp'],
               subjectName: widget.data['subjectName'],
-              className: widget.data['className'],
+              sectionName: widget.data['sectionName'],
             ),
 
             NoteEditor(
@@ -103,7 +103,7 @@ class _ModernResourceCard extends StatelessWidget {
   final List<dynamic> externalLinks;
   final dynamic postedTimestamp;
   final String? subjectName;
-  final String? className;
+  final String? sectionName;
 
   const _ModernResourceCard({
     required this.title,
@@ -113,7 +113,7 @@ class _ModernResourceCard extends StatelessWidget {
     required this.postedTimestamp,
     required this.externalLinks,
     this.subjectName,
-    this.className,
+    this.sectionName,
   });
 
   @override
@@ -133,7 +133,7 @@ class _ModernResourceCard extends StatelessWidget {
             Text(description, style: theme.textTheme.bodyMedium),
             const SizedBox(height: 10),
             if (subjectName != null) Text('Subject: $subjectName'),
-            if (className != null) Text('Class: $className'),
+            if (sectionName != null) Text('Section: $sectionName'),
             if (postedTimestamp != null)
               Text('Posted on: ${DateTime.fromMillisecondsSinceEpoch(postedTimestamp.seconds * 1000)}'),
             const SizedBox(height: 10),

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+
 class ResourceScreen extends StatefulWidget {
   const ResourceScreen({Key? key}) : super(key: key);
 
@@ -32,24 +33,27 @@ class _ResourceScreenState extends State<ResourceScreen> {
     }
   }
 
-  void _editResource(DocumentSnapshot doc, String subjectName, String className, Color color) {
+  void _editResource(DocumentSnapshot doc, String subjectName, String sectionName, Color color) {
     final data = doc.data() as Map<String, dynamic>;
 
     Navigator.pushNamed(
       context,
       '/createResource',
       arguments: {
+        'subjectId': data['subjectId'],   // include these too
+        'sectionId': data['sectionId'],   // so editing works properly
         'subjectName': subjectName,
-        'className': className,
+        'sectionName': sectionName,
         'resourceId': doc.id,
         'title': data['title'],
         'description': data['description'],
         'category': data['category'],
-        'links': List<String>.from(data['links'] ?? []),
+        'links': List<String>.from(data['externalLinks'] ?? []), // ✅ fixed
         'color': color,
       },
     );
   }
+
 
   String _formatTimestamp(Timestamp timestamp) {
     final date = timestamp.toDate();
@@ -70,7 +74,7 @@ class _ResourceScreenState extends State<ResourceScreen> {
   Widget build(BuildContext context) {
     final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
     final String subjectName = args['subjectName'];
-    final String className = args['className'];
+    final String sectionName = args['sectionName'];
     final Color color = args['color'] ?? Colors.indigo;
 
     final bool isLight = color.computeLuminance() > 0.5;
@@ -78,14 +82,14 @@ class _ResourceScreenState extends State<ResourceScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Resources · $subjectName - $className', style: TextStyle(color: textColor)),
+        title: Text('Resources · $subjectName - $sectionName', style: TextStyle(color: textColor)),
         backgroundColor: color,
         foregroundColor: textColor,
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _resourcesCollection
             .where('subjectName', isEqualTo: subjectName)
-            .where('className', isEqualTo: className)
+            .where('sectionName', isEqualTo: sectionName)
             .orderBy('category')
             .snapshots(),
         builder: (context, snapshot) {
@@ -156,7 +160,7 @@ class _ResourceScreenState extends State<ResourceScreen> {
                             IconButton(
                               tooltip: 'Edit',
                               icon: const Icon(Icons.edit, color: Colors.blueGrey),
-                              onPressed: () => _editResource(doc, subjectName, className, color),
+                              onPressed: () => _editResource(doc, subjectName, sectionName, color),
                             ),
                             IconButton(
                               tooltip: 'Delete',
@@ -189,8 +193,10 @@ class _ResourceScreenState extends State<ResourceScreen> {
             context,
             '/createResource',
             arguments: {
+              'subjectId': args['subjectId'],
+              'sectionId': args['sectionId'],
               'subjectName': subjectName,
-              'className': className,
+              'sectionName': sectionName,
               'color': color,
             },
           );

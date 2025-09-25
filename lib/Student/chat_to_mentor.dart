@@ -4,18 +4,18 @@ import 'student_private_chat_screen.dart';
 
 class StudentClassChatScreen extends StatefulWidget {
   final String subjectId;
-  final String classId;
+  final String sectionId;
   final String subjectName;
-  final String className;
+  final String sectionName;
   final String mentorId;
   final Color? color;
 
   const StudentClassChatScreen({
     super.key,
     required this.subjectId,
-    required this.classId,
+    required this.sectionId,
     required this.subjectName,
-    required this.className,
+    required this.sectionName,
     required this.mentorId,
     this.color,
   });
@@ -109,7 +109,7 @@ class _StudentClassChatScreenState extends State<StudentClassChatScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '${widget.subjectName} · ${widget.className}',
+                        '${widget.subjectName} · ${widget.sectionName}',
                         style: const TextStyle(
                           fontSize: 16,
                           color: Colors.grey,

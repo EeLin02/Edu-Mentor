@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'system structure/create_department.dart';
-import 'system structure/create_class.dart';
+import 'system structure/create_school.dart';
+import 'system structure/create_programme.dart';
 import 'system structure/create_subject.dart';
-import 'system structure/assign_student_&_mentor.dart';
+import 'system structure/create_section.dart';
+import 'system structure/assign_mentor.dart';
 import 'system structure/view_assign_roles.dart';
-
 
 class SystemStructureScreen extends StatefulWidget {
   @override
@@ -25,13 +24,25 @@ class _SystemStructureScreenState extends State<SystemStructureScreen> {
           mainAxisSpacing: 16.0,
           children: [
             _DashboardCard(
-              title: "CREATE DEPARTMENT",
-              subtitle: "Add and Manage Departments",
-              icon: Icons.account_tree_outlined,
+              title: "CREATE SCHOOL",
+              subtitle: "Add and Manage Schools",
+              icon: Icons.apartment_outlined,
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => ManageDepartmentsScreen()),
+                  MaterialPageRoute(builder: (_) => ManageSchoolsScreen()),
+                );
+              },
+            ),
+            _DashboardCard(
+              title: "CREATE PROGRAMME",
+              subtitle: "Add and Manage Programmes (via Schools)",
+              icon: Icons.school_outlined,
+              onTap: () {
+                // 👇 Always go through ManageSchoolsScreen first
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => ManageProgrammesScreen()),
                 );
               },
             ),
@@ -47,25 +58,25 @@ class _SystemStructureScreenState extends State<SystemStructureScreen> {
               },
             ),
             _DashboardCard(
-              title: "CREATE CLASS",
-              subtitle: "Add and Manage Classes",
-              icon: Icons.class_,
+              title: "CREATE SECTION",
+              subtitle: "Add and Manage Sections",
+              icon: Icons.group_outlined,
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => ManageClassesScreen()),
+                  MaterialPageRoute(builder: (_) => ManageSectionsScreen()),
                 );
               },
             ),
-
             _DashboardCard(
-              title: "ASSIGN ROLES TO SYSTEM STRUCTURE",
-              subtitle: "Assign by Department, Class, and Subject",
+              title: "ASSIGN MENTOR TO SYSTEM STRUCTURE",
+              subtitle: "Assign Roles to Structure",
               icon: Icons.hub_outlined,
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => ManageStudentsAndMentorsScreen()),
+                  MaterialPageRoute(
+                      builder: (_) => AssignMentorScreen()),
                 );
               },
             ),
@@ -113,8 +124,12 @@ class _DashboardCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               Icon(icon, size: 40, color: Colors.blue),
-              Text(title, textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              Text(subtitle, textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              Text(title,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Text(subtitle,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600])),
             ],
           ),
         ),
@@ -122,4 +137,3 @@ class _DashboardCard extends StatelessWidget {
     );
   }
 }
-

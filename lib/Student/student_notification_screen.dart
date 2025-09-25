@@ -92,7 +92,7 @@ class _StudentNotificationScreenState extends State<StudentNotificationScreen> {
                 final data = doc.data() as Map<String, dynamic>;
                 return enrolledSubjects.any((enroll) =>
                 enroll['subjectId'] == data['subjectId'] &&
-                    enroll['classId'] == data['classId']);
+                    enroll['sectionId'] == data['sectionId']);
               }).toList();
 
               if (docs.isEmpty) {
@@ -109,7 +109,7 @@ class _StudentNotificationScreenState extends State<StudentNotificationScreen> {
                   return ListTile(
                     leading: const Icon(Icons.campaign, color: Colors.redAccent),
                     title: Text(
-                      "${data['subjectName'] ?? ''}.${data['className'] ?? ''}",
+                      "${data['subjectName'] ?? ''}.${data['sectionName'] ?? ''}",
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Column(

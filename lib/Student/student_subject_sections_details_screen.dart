@@ -1,29 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class StudentSubjectClassDetailsScreen extends StatefulWidget {
-  final String classId;
+class StudentSubjectSectionsDetailsScreen extends StatefulWidget {
+  final String sectionId;
   final String subjectId;
   final String studentId;
+  final String schoolId;
+  final String programmeId;
   final Color color;
 
-  const StudentSubjectClassDetailsScreen({
+  const StudentSubjectSectionsDetailsScreen({
     super.key,
-    required this.classId,
+    required this.sectionId,
     required this.subjectId,
     required this.studentId,
+    required this.schoolId,
+    required this.programmeId,
     required this.color,
   });
 
+
   @override
-  State<StudentSubjectClassDetailsScreen> createState() =>
+  State<StudentSubjectSectionsDetailsScreen> createState() =>
       _StudentSubjectClassDetailsScreenState();
 }
 
 class _StudentSubjectClassDetailsScreenState
-    extends State<StudentSubjectClassDetailsScreen> {
+    extends State<StudentSubjectSectionsDetailsScreen> {
   String subjectName = '';
-  String className = '';
+  String sectionName = '';
   String mentorId = '';
   String mentorName = '';
   Color color = Colors.blue;
@@ -38,13 +43,15 @@ class _StudentSubjectClassDetailsScreenState
 
   Future<void> fetchDetails() async {
     try {
-      final departmentsSnapshot =
-      await FirebaseFirestore.instance.collection('departments').get();
+      final schoolsSnapshot =
+      await FirebaseFirestore.instance.collection('schools').get();
 
-      for (var dept in departmentsSnapshot.docs) {
+      for (var dept in schoolsSnapshot.docs) {
         final subjectDoc = await FirebaseFirestore.instance
-            .collection('departments')
-            .doc(dept.id)
+            .collection('schools')
+            .doc(widget.schoolId)
+            .collection('programmes')
+            .doc(widget.programmeId)
             .collection('subjects')
             .doc(widget.subjectId)
             .get();
@@ -52,24 +59,28 @@ class _StudentSubjectClassDetailsScreenState
         if (subjectDoc.exists) {
           final subjectNameFromDb = subjectDoc.data()?['name'] ?? 'Unknown Subject';
 
-          final classDoc = await FirebaseFirestore.instance
-              .collection('departments')
-              .doc(dept.id)
+          final sectionDoc = await FirebaseFirestore.instance
+              .collection('schools')
+              .doc(widget.schoolId)
+              .collection('programmes')
+              .doc(widget.programmeId)
               .collection('subjects')
               .doc(widget.subjectId)
-              .collection('classes')
-              .doc(widget.classId)
+              .collection('sections')
+              .doc(widget.sectionId)
               .get();
 
-          if (classDoc.exists) {
+          if (sectionDoc.exists) {
             String fetchedMentorId = '';
 
             final mentorQuery = await FirebaseFirestore.instance
                 .collection('subjectMentors')
-                .where('departmentId', isEqualTo: dept.id)
+                .where('schoolId', isEqualTo: widget.schoolId)
+                .where('programmeId', isEqualTo: widget.programmeId)
                 .where('subjectId', isEqualTo: widget.subjectId)
-                .where('classIds', arrayContains: widget.classId)
+                .where('sectionId', isEqualTo: widget.sectionId)
                 .get();
+
 
             print('[DEBUG] subjectMentors result count = ${mentorQuery.docs.length}');
 
@@ -80,13 +91,13 @@ class _StudentSubjectClassDetailsScreenState
               print('[DEBUG] No matching subjectMentors document found.');
             }
 
-            final classNameFromDb = classDoc.data()?['name'] ?? 'Unknown Class';
+            final sectionNameFromDb = sectionDoc.data()?['name'] ?? 'Unknown Class';
 
             Color updatedColor = widget.color;
             if (fetchedMentorId.isNotEmpty) {
               final customizationDoc = await FirebaseFirestore.instance
-                  .collection('mentorCustomizations')
-                  .doc('${fetchedMentorId}_${widget.classId}')
+                  .collection('studentCustomizations')
+                  .doc('${fetchedMentorId}_${widget.sectionId}')
                   .get();
 
               if (customizationDoc.exists && customizationDoc.data()?['color'] != null) {
@@ -113,7 +124,7 @@ class _StudentSubjectClassDetailsScreenState
 
             setState(() {
               subjectName = subjectNameFromDb;
-              className = classNameFromDb;
+              sectionName = sectionNameFromDb;
               mentorId = fetchedMentorId;
               mentorName = fetchedMentorName;
               color = updatedColor;
@@ -126,14 +137,14 @@ class _StudentSubjectClassDetailsScreenState
 
       setState(() {
         subjectName = 'Not Found';
-        className = 'Not Found';
+        sectionName = 'Not Found';
         isLoading = false;
       });
     } catch (e) {
       print('[ERROR] fetchDetails failed: $e');
       setState(() {
         subjectName = 'Error';
-        className = 'Error';
+        sectionName = 'Error';
         isLoading = false;
       });
     }
@@ -148,7 +159,7 @@ class _StudentSubjectClassDetailsScreenState
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          isLoading ? 'Loading...' : '$subjectName · $className',
+          isLoading ? 'Loading...' : '$subjectName · $sectionName',
           style: TextStyle(color: textColor),
         ),
         backgroundColor: color,
@@ -178,8 +189,8 @@ class _StudentSubjectClassDetailsScreenState
                   arguments: {
                     'subjectId': widget.subjectId,
                     'subjectName': subjectName,
-                    'classId': widget.classId,
-                    'className': className,
+                    'sectionId': widget.sectionId,
+                    'sectionName': sectionName,
                     'color': color,
                   },
                 );
@@ -205,9 +216,9 @@ class _StudentSubjectClassDetailsScreenState
                   '/studentClassChat',
                   arguments: {
                     'subjectId': widget.subjectId,
-                    'classId': widget.classId,
+                    'sectionId': widget.sectionId,
                     'subjectName': subjectName,
-                    'className': className,
+                    'sectionName': sectionName,
                     'mentorId': mentorId,
                     'color': color,
                   },
@@ -222,7 +233,7 @@ class _StudentSubjectClassDetailsScreenState
               onTap: () {
                 Navigator.pushNamed(context, '/studentShareResources', arguments: {
                   'subjectName': subjectName,
-                  'className': className,
+                  'sectionName': sectionName,
                   'color': color,
                 });
               },
@@ -236,7 +247,7 @@ class _StudentSubjectClassDetailsScreenState
               onTap: () {
                 Navigator.pushNamed(context, '/studentNotes', arguments: {
                   'subjectName': subjectName,
-                  'className': className,
+                  'sectionName': sectionName,
                   'color': color,
                 });
               },
@@ -252,7 +263,7 @@ class _StudentSubjectClassDetailsScreenState
                   context,
                   '/studentAttendanceRecords',
                   arguments: {
-                    'classId': widget.classId,
+                    'sectionId': widget.sectionId,
                     'subjectId': widget.subjectId,
                     'studentId': widget.studentId, // from list or Firestore query
                     'color': widget.color,
@@ -270,7 +281,7 @@ class _StudentSubjectClassDetailsScreenState
                   context,
                   '/studentQuizzes',
                   arguments: {
-                    'classId': widget.classId,
+                    'sectionId': widget.sectionId,
                     'subjectId': widget.subjectId,
                     'studentId': widget.studentId,
                     'color': color,
@@ -300,7 +311,7 @@ class _StudentSubjectClassDetailsScreenState
           children: [
             _infoRow('Subject:', subjectName, textColor, valueColor),
             const SizedBox(height: 10),
-            _infoRow('Class:', className, textColor, valueColor),
+            _infoRow('Class:', sectionName, textColor, valueColor),
           ],
         ),
       ),

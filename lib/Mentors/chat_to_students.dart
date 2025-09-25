@@ -5,25 +5,26 @@ import 'private_chat_screen.dart';
 
 class ClassChatScreen extends StatefulWidget {
   final String subjectId;
-  final String classId;
+  final String sectionId;
   final String subjectName;
-  final String className;
-  final Color? color;
+  final String sectionName;
   final String mentorId;
+  final Color? color;
 
   const ClassChatScreen({
     Key? key,
     required this.subjectId,
-    required this.classId,
+    required this.sectionId,
     required this.subjectName,
-    required this.className,
+    required this.sectionName,
     required this.mentorId,
     this.color,
   }) : super(key: key);
 
   @override
-  State<ClassChatScreen> createState() => _ClassChatScreenState();
+  _ClassChatScreenState createState() => _ClassChatScreenState();
 }
+
 
 class _ClassChatScreenState extends State<ClassChatScreen> {
   late Future<List<Map<String, String>>> _enrolledStudentsFuture;
@@ -43,7 +44,7 @@ class _ClassChatScreenState extends State<ClassChatScreen> {
     final enrollmentSnap = await firestore
         .collection('subjectEnrollments')
         .where('subjectId', isEqualTo: widget.subjectId)
-        .where('classId', isEqualTo: widget.classId)
+        .where('sectionId', isEqualTo: widget.sectionId)
         .get();
 
     final studentIds = enrollmentSnap.docs
@@ -96,7 +97,7 @@ class _ClassChatScreenState extends State<ClassChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Class Chat · ${widget.subjectName} - ${widget.className}'),
+        title: Text('Chat Screen · ${widget.subjectName} - ${widget.sectionName}'),
         backgroundColor: appBarColor,
         foregroundColor: textColor,
       ),

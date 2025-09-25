@@ -228,16 +228,28 @@ class _ModernResourceCard extends StatelessWidget {
       rawLink = 'https://$rawLink';
     }
 
-    final uri = Uri.parse(rawLink);
-
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
+    final uri = Uri.tryParse(rawLink);
+    if (uri == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open link: $rawLink')),
+        SnackBar(content: Text('Invalid link: $rawLink')),
+      );
+      return;
+    }
+
+    try {
+      final success = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open link: $rawLink')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error opening link: $e')),
       );
     }
   }
+
 
 
   Future<void> _downloadFile(BuildContext context, String url, String filename) async {

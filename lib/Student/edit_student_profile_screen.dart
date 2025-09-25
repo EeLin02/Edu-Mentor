@@ -309,7 +309,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                         : AssetImage("assets/images/student_icon.png") as ImageProvider),
                   ),
                   IconButton(
-                    icon: Icon(Icons.camera_alt, color: Colors.teal),
+                    icon: Icon(Icons.camera_alt, color: Colors.blue),
                     onPressed: _pickImage,
                   ),
                 ],

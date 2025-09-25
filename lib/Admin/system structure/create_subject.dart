@@ -10,15 +10,183 @@ class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
   final TextEditingController subjectController = TextEditingController();
   final TextEditingController searchController = TextEditingController();
 
-  String? selectedDepartment;
+  String? selectedSchool;
+  String? selectedProgramme;
+
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   String _getFieldName(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>?;
-    return data != null && data.containsKey('name') ? data['name'] as String : 'Unnamed Subject';
+    return data != null && data.containsKey('name')
+        ? data['name'] as String
+        : 'Unnamed';
   }
 
+  /// ------------------------------
+  /// Searchable Dialog for Schools
+  /// ------------------------------
+  void openSchoolSelectionDialog(List<QueryDocumentSnapshot> schools) async {
+    final selectedId = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        String? tempSelected = selectedSchool;
+        List<QueryDocumentSnapshot> filteredSchools = List.from(schools);
+
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: Text("Select School"),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 400,
+                child: Column(
+                  children: [
+                    TextField(
+                      decoration: InputDecoration(
+                        labelText: "Search schools",
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) {
+                        setStateDialog(() {
+                          filteredSchools = schools
+                              .where((doc) => doc['name']
+                              .toString()
+                              .toLowerCase()
+                              .contains(value.toLowerCase()))
+                              .toList();
+                        });
+                      },
+                    ),
+                    SizedBox(height: 10),
+                    Expanded(
+                      child: ListView(
+                        children: filteredSchools.map((doc) {
+                          return RadioListTile<String>(
+                            title: Text(doc['name']),
+                            value: doc.id,
+                            groupValue: tempSelected,
+                            onChanged: (val) {
+                              setStateDialog(() {
+                                tempSelected = val;
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, null),
+                  child: Text("Cancel"),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, tempSelected),
+                  child: Text("Select"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (selectedId != null) {
+      setState(() {
+        selectedSchool = selectedId;
+        selectedProgramme = null; // reset programme
+      });
+    }
+  }
+
+  /// ------------------------------
+  /// Searchable Dialog for Programmes
+  /// ------------------------------
+  void openProgrammeSelectionDialog(List<QueryDocumentSnapshot> progs) async {
+    final selectedId = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        String? tempSelected = selectedProgramme;
+        List<QueryDocumentSnapshot> filteredProgs = List.from(progs);
+
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: Text("Select Programme"),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 400,
+                child: Column(
+                  children: [
+                    TextField(
+                      decoration: InputDecoration(
+                        labelText: "Search programmes",
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) {
+                        setStateDialog(() {
+                          filteredProgs = progs
+                              .where((doc) => doc['name']
+                              .toString()
+                              .toLowerCase()
+                              .contains(value.toLowerCase()))
+                              .toList();
+                        });
+                      },
+                    ),
+                    SizedBox(height: 10),
+                    Expanded(
+                      child: ListView(
+                        children: filteredProgs.map((doc) {
+                          return RadioListTile<String>(
+                            title: Text(doc['name']),
+                            value: doc.id,
+                            groupValue: tempSelected,
+                            onChanged: (val) {
+                              setStateDialog(() {
+                                tempSelected = val;
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, null),
+                  child: Text("Cancel"),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, tempSelected),
+                  child: Text("Select"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (selectedId != null) {
+      setState(() {
+        selectedProgramme = selectedId;
+      });
+    }
+  }
+
+  /// ------------------------------
+  /// Edit Subject Dialog
+  /// ------------------------------
   void _showEditDialog(String subjectId, String currentName) {
-    final TextEditingController editController = TextEditingController(text: currentName);
+    final TextEditingController editController =
+    TextEditingController(text: currentName);
 
     showDialog(
       context: context,
@@ -39,10 +207,14 @@ class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
           ElevatedButton(
             onPressed: () async {
               final newName = editController.text.trim();
-              if (newName.isNotEmpty) {
-                await FirebaseFirestore.instance
-                    .collection('departments')
-                    .doc(selectedDepartment)
+              if (newName.isNotEmpty &&
+                  selectedSchool != null &&
+                  selectedProgramme != null) {
+                await _firestore
+                    .collection('schools')
+                    .doc(selectedSchool)
+                    .collection('programmes')
+                    .doc(selectedProgramme)
                     .collection('subjects')
                     .doc(subjectId)
                     .update({'name': newName});
@@ -71,39 +243,104 @@ class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // Department Dropdown
+            /// --- School Selection ---
             StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('departments').snapshots(),
+              stream: _firestore.collection('schools').orderBy('name').snapshots(),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(child: CircularProgressIndicator());
-                }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return Text("No departments available.");
-                }
+                if (!snapshot.hasData) return CircularProgressIndicator();
+                final schools = snapshot.data!.docs;
 
-                return DropdownButton<String>(
-                  value: selectedDepartment,
-                  hint: Text("Select a Department"),
-                  isExpanded: true,
-                  items: snapshot.data!.docs.map((doc) {
-                    final name = (doc.data() as Map<String, dynamic>)['name'] ?? 'Unnamed Department';
-                    return DropdownMenuItem<String>(
-                      value: doc.id,
-                      child: Text(name),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      selectedDepartment = value;
-                    });
-                  },
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("School",
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    SizedBox(height: 6),
+                    GestureDetector(
+                      onTap: () => openSchoolSelectionDialog(schools),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade400),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              selectedSchool == null
+                                  ? "Select School"
+                                  : schools.firstWhere((s) => s.id == selectedSchool)['name'],
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: selectedSchool == null
+                                    ? Colors.grey.shade500
+                                    : Colors.black,
+                              ),
+                            ),
+                            Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 );
               },
             ),
-            SizedBox(height: 12),
+            SizedBox(height: 16),
 
-            // Subject Name Input
+            /// --- Programme Selection ---
+            if (selectedSchool != null)
+              StreamBuilder<QuerySnapshot>(
+                stream: _firestore
+                    .collection('schools')
+                    .doc(selectedSchool)
+                    .collection('programmes')
+                    .orderBy('name')
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return CircularProgressIndicator();
+                  final progs = snapshot.data!.docs;
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Programme",
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      SizedBox(height: 6),
+                      GestureDetector(
+                        onTap: () => openProgrammeSelectionDialog(progs),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade400),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                selectedProgramme == null
+                                    ? "Select Programme"
+                                    : progs.firstWhere((p) => p.id == selectedProgramme)['name'],
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: selectedProgramme == null
+                                      ? Colors.grey.shade500
+                                      : Colors.black,
+                                ),
+                              ),
+                              Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+
+            /// --- Subject Input ---
             TextField(
               controller: subjectController,
               decoration: InputDecoration(
@@ -116,15 +353,18 @@ class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
             ElevatedButton(
               onPressed: () async {
                 final name = subjectController.text.trim();
-                if (name.isNotEmpty && selectedDepartment != null) {
-                  final newSubjectRef = await FirebaseFirestore.instance
-                      .collection('departments')
-                      .doc(selectedDepartment)
+                if (name.isNotEmpty &&
+                    selectedSchool != null &&
+                    selectedProgramme != null) {
+                  final newSubjectRef = await _firestore
+                      .collection('schools')
+                      .doc(selectedSchool)
+                      .collection('programmes')
+                      .doc(selectedProgramme)
                       .collection('subjects')
                       .add({'name': name});
 
                   await newSubjectRef.update({'subjectId': newSubjectRef.id});
-
                   subjectController.clear();
                 }
               },
@@ -132,7 +372,7 @@ class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
             ),
             SizedBox(height: 16),
 
-            // Search Field
+            /// --- Search Field ---
             TextField(
               controller: searchController,
               decoration: InputDecoration(
@@ -144,36 +384,30 @@ class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
             ),
             SizedBox(height: 16),
 
-            // Subject List
-            if (selectedDepartment != null)
+            /// --- Subject List ---
+            if (selectedSchool != null && selectedProgramme != null)
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('departments')
-                      .doc(selectedDepartment)
+                  stream: _firestore
+                      .collection('schools')
+                      .doc(selectedSchool)
+                      .collection('programmes')
+                      .doc(selectedProgramme)
                       .collection('subjects')
                       .orderBy('name')
                       .snapshots(),
                   builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
+                    if (!snapshot.hasData) {
                       return Center(child: CircularProgressIndicator());
                     }
-                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      return Center(child: Text("No subjects found."));
-                    }
-
-                    print("Subjects count from Firestore: ${snapshot.data!.docs.length}");
-
                     final subjects = snapshot.data!.docs.where((doc) {
                       final name = _getFieldName(doc).toLowerCase();
                       final query = searchController.text.toLowerCase();
                       return name.contains(query);
                     }).toList();
 
-                    print("Filtered subjects count: ${subjects.length}");
-
                     if (subjects.isEmpty) {
-                      return Center(child: Text("No subjects match the search."));
+                      return Center(child: Text("No subjects found."));
                     }
 
                     return ListView.builder(
@@ -189,7 +423,8 @@ class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
                             children: [
                               IconButton(
                                 icon: Icon(Icons.edit, color: Colors.blue),
-                                onPressed: () => _showEditDialog(subject.id, name),
+                                onPressed: () =>
+                                    _showEditDialog(subject.id, name),
                               ),
                               IconButton(
                                 icon: Icon(Icons.delete, color: Colors.red),
@@ -201,20 +436,24 @@ class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
                                       content: Text("Delete this subject?"),
                                       actions: [
                                         TextButton(
-                                          onPressed: () => Navigator.pop(context, false),
+                                          onPressed: () =>
+                                              Navigator.pop(context, false),
                                           child: Text("Cancel"),
                                         ),
                                         TextButton(
-                                          onPressed: () => Navigator.pop(context, true),
+                                          onPressed: () =>
+                                              Navigator.pop(context, true),
                                           child: Text("Delete"),
                                         ),
                                       ],
                                     ),
                                   );
                                   if (confirm == true) {
-                                    await FirebaseFirestore.instance
-                                        .collection('departments')
-                                        .doc(selectedDepartment)
+                                    await _firestore
+                                        .collection('schools')
+                                        .doc(selectedSchool)
+                                        .collection('programmes')
+                                        .doc(selectedProgramme)
                                         .collection('subjects')
                                         .doc(subject.id)
                                         .delete();

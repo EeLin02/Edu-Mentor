@@ -3,14 +3,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
 class StudentQuizzesScreen extends StatelessWidget {
-  final String classId;
+  final String sectionId;
   final String subjectId;
   final String studentId;
   final Color color;
 
   const StudentQuizzesScreen({
     super.key,
-    required this.classId,
+    required this.sectionId,
     required this.subjectId,
     required this.studentId,
     required this.color,
@@ -30,7 +30,7 @@ class StudentQuizzesScreen extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection("quizzes")
-            .where("classId", isEqualTo: classId)
+            .where("sectionId", isEqualTo: sectionId)
             .where("subjectId", isEqualTo: subjectId)
             .orderBy("publishDate", descending: true)
             .snapshots(),
@@ -164,7 +164,7 @@ class StudentQuizzesScreen extends StatelessWidget {
                                   arguments: {
                                     "quizId": quizId,
                                     "studentId": studentId,
-                                    "classId": classId,
+                                    "sectionId": sectionId,
                                     "subjectId": subjectId,
                                     "color": color,
                                     "title": title,

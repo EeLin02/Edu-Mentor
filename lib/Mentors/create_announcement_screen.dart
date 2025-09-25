@@ -10,8 +10,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 class CreateAnnouncementScreen extends StatefulWidget {
   final String? subjectId;
   final String? subjectName;
-  final String? classId;
-  final String? className;
+  final String? sectionId;
+  final String? sectionName;
   final String? announcementId;
   final String? title;
   final String? description;
@@ -24,8 +24,8 @@ class CreateAnnouncementScreen extends StatefulWidget {
     Key? key,
     required this.subjectId,
     required this.subjectName,
-    required this.classId,
-    required this.className,
+    required this.sectionId,
+    required this.sectionName,
     this.announcementId,
     this.title,
     this.description,
@@ -171,7 +171,7 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
     for (var file in _selectedFiles) {
       final fileName = path.basename(file.path!);
       final ref = FirebaseStorage.instance
-          .ref('announcements/${widget.subjectName}_${widget.className}/$fileName');
+          .ref('announcements/${widget.subjectName}_${widget.sectionName}/$fileName');
       final uploadTask = await ref.putFile(File(file.path!));
       final url = await uploadTask.ref.getDownloadURL();
       newFileUrls.add(url);
@@ -182,8 +182,8 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
     final data = {
       'subjectId': widget.subjectId ?? '',
       'subjectName': widget.subjectName ?? '',
-      'classId': widget.classId ?? '',
-      'className': widget.className ?? '',
+      'sectionId': widget.sectionId ?? '',
+      'sectionName': widget.sectionName ?? '',
       'title': title,
       'description': description,
       'files': fileUrls,

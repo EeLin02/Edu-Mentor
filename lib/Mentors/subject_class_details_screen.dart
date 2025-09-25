@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 
-class SubjectClassDetailsScreen extends StatelessWidget {
+class SubjectSectionDetailsScreen extends StatelessWidget {
   final String subjectName;
-  final String className;
+  final String sectionName;
   final Color color;
   final String subjectId;
-  final String classId;
+  final String sectionId;
   final String mentorId;
 
-  const SubjectClassDetailsScreen({
+  const SubjectSectionDetailsScreen({
     Key? key,
     required this.subjectName,
-    required this.className,
+    required this.sectionName,
     required this.color,
     required this.subjectId,
-    required this.classId,
+    required this.sectionId,
     required this.mentorId,
   }) : super(key: key);
 
@@ -29,7 +29,7 @@ class SubjectClassDetailsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text('$subjectName · $className', style: TextStyle(color: textColor)),
+        title: Text('$subjectName · $sectionName', style: TextStyle(color: textColor)),
         backgroundColor: color,
         iconTheme: IconThemeData(color: textColor),
         elevation: 4,
@@ -55,10 +55,10 @@ class SubjectClassDetailsScreen extends StatelessWidget {
               onTap: () {
                 Navigator.pushNamed(context, '/announcement', arguments: {
                   'subjectId': subjectId,
-                  'classId': classId,
+                  'sectionId': sectionId,
                   'mentorId': mentorId,
                   'subjectName': subjectName,
-                  'className': className,
+                  'sectionName': sectionName,
                   'color': color,
                 });
               },
@@ -75,10 +75,10 @@ class SubjectClassDetailsScreen extends StatelessWidget {
                   '/classChat',
                   arguments: {
                     'subjectId': subjectId,
-                    'classId': classId,
+                    'sectionId': sectionId,
                     'mentorId': mentorId,
                     'subjectName': subjectName,
-                    'className': className,
+                    'sectionName': sectionName,
                     'color': color, // optional
                   },
                 );
@@ -93,8 +93,11 @@ class SubjectClassDetailsScreen extends StatelessWidget {
               textColor: textColor,
               onTap: () {
                 Navigator.pushNamed(context, '/shareResources', arguments: {
+                  'subjectId': subjectId,
+                  'sectionId': sectionId,
+                  'mentorId': mentorId,
                   'subjectName': subjectName,
-                  'className': className,
+                  'sectionName': sectionName,
                   'color': color,
                 });
               },
@@ -108,10 +111,10 @@ class SubjectClassDetailsScreen extends StatelessWidget {
               onTap: () {
                 Navigator.pushNamed(context, '/takeAttendance', arguments: {
                   'subjectId': subjectId,
-                  'classId': classId,
+                  'sectionId': sectionId,
                   'mentorId': mentorId,
                   'subjectName': subjectName,
-                  'className': className,
+                  'sectionName': sectionName,
                   'color': color,
                 });
               },
@@ -128,10 +131,10 @@ class SubjectClassDetailsScreen extends StatelessWidget {
                   '/weeklyQuiz',
                   arguments: {
                     'subjectId': subjectId,
-                    'classId': classId,
+                    'sectionId': sectionId,
                     'mentorId': mentorId,
                     'subjectName': subjectName,
-                    'className': className,
+                    'sectionName': sectionName,
                     'color': color,
                   },
                 );
@@ -157,7 +160,7 @@ class SubjectClassDetailsScreen extends StatelessWidget {
           children: [
             _infoRow('Subject:', subjectName, textColor, valueTextColor),
             const SizedBox(height: 10),
-            _infoRow('Class:', className, textColor, valueTextColor),
+            _infoRow('Section:', sectionName, textColor, valueTextColor),
             const SizedBox(height: 10),
 
           ],

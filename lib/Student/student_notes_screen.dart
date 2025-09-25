@@ -23,7 +23,7 @@ class _StudentNotesPageState extends State<StudentNotesPage> {
   Widget build(BuildContext context) {
     final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
     final String subjectName = args['subjectName'];
-    final String className = args['className'];
+    final String sectionName = args['sectionName'];
     final Color color = args['color'] ?? Colors.indigo;
 
     final bool isLight = color.computeLuminance() > 0.5;
@@ -39,7 +39,7 @@ class _StudentNotesPageState extends State<StudentNotesPage> {
         stream: _savedRef
             .where('studentId', isEqualTo: currentUser?.uid)
             .where('subjectName', isEqualTo: subjectName)
-            .where('className', isEqualTo: className)
+            .where('sectionName', isEqualTo: sectionName)
             .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {

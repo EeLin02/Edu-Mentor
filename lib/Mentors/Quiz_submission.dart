@@ -78,18 +78,26 @@ class SubmissionDetailScreen extends StatelessWidget {
                       final questionText = q["question"] ?? "Untitled";
                       final type = q["type"] ?? "multiple_choice";
                       final correctAnswer = q["correctAnswer"]?.toString() ?? "";
-                      final options =
-                      List<String>.from(q["options"] ?? []);
+                      final options = List<String>.from(q["options"] ?? []);
 
-                      // student's raw answer (index or string)
+// student's raw answer
                       final studentRawAnswer = answersMap[qId];
 
                       String studentAnswer = "";
                       if (type == "multiple_choice") {
-                        if (studentRawAnswer is int &&
-                            studentRawAnswer >= 0 &&
-                            studentRawAnswer < options.length) {
-                          studentAnswer = options[studentRawAnswer];
+                        if (studentRawAnswer is int) {
+                          // single choice
+                          if (studentRawAnswer >= 0 && studentRawAnswer < options.length) {
+                            studentAnswer = options[studentRawAnswer];
+                          }
+                        } else if (studentRawAnswer is List) {
+                          // multiple choice (array of indices)
+                          final selected = studentRawAnswer
+                              .whereType<int>()
+                              .where((i) => i >= 0 && i < options.length)
+                              .map((i) => options[i])
+                              .toList();
+                          studentAnswer = selected.isNotEmpty ? selected.join(", ") : "(No Answer)";
                         } else {
                           studentAnswer = "(No Answer)";
                         }
@@ -97,9 +105,10 @@ class SubmissionDetailScreen extends StatelessWidget {
                         studentAnswer = studentRawAnswer?.toString() ?? "";
                       }
 
-                      final bool isCorrect =
-                          studentAnswer.trim().toLowerCase() ==
-                              correctAnswer.trim().toLowerCase();
+                      // use correctness map from Firestore
+                      final correctnessMap =
+                      Map<String, dynamic>.from(submissionData["correctness"] ?? {});
+                      final bool isCorrect = correctnessMap[qId] == true;
 
                       return Card(
                         child: ListTile(
@@ -117,6 +126,7 @@ class SubmissionDetailScreen extends StatelessWidget {
                           ),
                         ),
                       );
+
                     }).toList(),
                   ],
                 ),

@@ -25,7 +25,7 @@ class StudentAnnouncementScreen extends StatelessWidget {
     final args = ModalRoute.of(context)!.settings.arguments as Map?;
     final String? announcementId = args?['announcementId']; // from notification
     final String? subjectName = args?['subjectName'];
-    final String? className = args?['className'];
+    final String? sectionName = args?['sectionName'];
     final Color color = (args?['color'] ?? Colors.teal) as Color;
     final bool isLight = color.computeLuminance() > 0.5;
     final Color textColor = isLight ? Colors.black87 : Colors.white;
@@ -78,7 +78,7 @@ class StudentAnnouncementScreen extends StatelessWidget {
     }
 
     // 🔹 Case 2: Normal navigation → show list of announcements
-    if (subjectName == null || className == null) {
+    if (subjectName == null || sectionName == null) {
       return const Scaffold(
         body: Center(child: Text("Missing subject or class info")),
       );
@@ -89,7 +89,7 @@ class StudentAnnouncementScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Announcements · $subjectName - $className',
+        title: Text('Announcements · $subjectName - $sectionName',
             style: TextStyle(color: textColor)),
         backgroundColor: color,
         foregroundColor: textColor,
@@ -97,7 +97,7 @@ class StudentAnnouncementScreen extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         stream: announcementsCollection
             .where('subjectName', isEqualTo: subjectName)
-            .where('className', isEqualTo: className)
+            .where('sectionName', isEqualTo: sectionName)
             .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {

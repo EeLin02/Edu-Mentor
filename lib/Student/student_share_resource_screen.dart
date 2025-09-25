@@ -47,7 +47,7 @@ class _StudentResourceScreenState extends State<StudentResourceScreen> {
         'resourceId': resourceId,
         'title': resourceData['title'] ?? '',
         'subjectName': resourceData['subjectName'] ?? '',
-        'className': resourceData['className'] ?? '',
+        'sectionName': resourceData['sectionName'] ?? '',
         'timestamp': FieldValue.serverTimestamp(),
       });
     }
@@ -71,7 +71,7 @@ class _StudentResourceScreenState extends State<StudentResourceScreen> {
   Widget build(BuildContext context) {
     final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
     final String subjectName = args['subjectName'];
-    final String className = args['className'];
+    final String sectionName = args['sectionName'];
     final Color color = args['color'] ?? Colors.indigo;
 
     final bool isLight = color.computeLuminance() > 0.5;
@@ -79,7 +79,7 @@ class _StudentResourceScreenState extends State<StudentResourceScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Resources · $subjectName - $className',
+        title: Text('Resources · $subjectName - $sectionName',
             style: TextStyle(color: textColor)),
         backgroundColor: color,
         foregroundColor: textColor,
@@ -87,7 +87,7 @@ class _StudentResourceScreenState extends State<StudentResourceScreen> {
       body: StreamBuilder<QuerySnapshot>(
         stream: _resourcesCollection
             .where('subjectName', isEqualTo: subjectName)
-            .where('className', isEqualTo: className)
+            .where('sectionName', isEqualTo: sectionName)
             .orderBy('category')
             .snapshots(),
         builder: (context, snapshot) {

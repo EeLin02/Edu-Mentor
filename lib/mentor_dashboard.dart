@@ -10,23 +10,19 @@ import 'Mentors/mentor_card.dart';
 import 'Mentors/forums_screen.dart';
 import 'Mentors/notice_screen.dart';
 
-
 class MentorDashboard extends StatefulWidget {
   @override
   _MentorDashboardState createState() => _MentorDashboardState();
 }
 
 class _MentorDashboardState extends State<MentorDashboard> {
-  Map<String, List<Map<String, dynamic>>> departmentsData = {};
+  Map<String, List<Map<String, dynamic>>> programmesData = {};
+  Set<String> favoriteIds = {}; // store mentor’s favorites
   String? mentorId;
   bool isLoading = true;
   bool _isDarkMode = false;
 
   int _selectedIndex = 0;
-
-
-
-
 
   @override
   void initState() {
@@ -44,8 +40,7 @@ class _MentorDashboardState extends State<MentorDashboard> {
   }
 
   final List<Widget> _screens = [
-    // Your full dashboard UI wrapped in a widget
-    MentorDashboard(),  // see next for this widget
+    MentorDashboard(),
     MentorForumScreen(),
     NoticeScreen(),
   ];
@@ -63,7 +58,7 @@ class _MentorDashboardState extends State<MentorDashboard> {
         setState(() {
           mentorId = user.uid;
         });
-        await _fetchDepartmentsAndClasses();
+        await _fetchProgrammesAndSections(user.uid); // ✅ pass mentorId
       } else {
         setState(() {
           isLoading = false;
@@ -76,100 +71,169 @@ class _MentorDashboardState extends State<MentorDashboard> {
     }
   }
 
-  Future<void> _fetchDepartmentsAndClasses() async {
-    if (mentorId == null) return;
 
+  Future<void> _fetchProgrammesAndSections(String mentorId) async {
     try {
-      final customizationsSnapshot = await FirebaseFirestore.instance
-          .collection('mentorCustomizations')
-          .where('mentorId', isEqualTo: mentorId)
+      // --- Step 1: Load favorites ---
+      final favSnap = await FirebaseFirestore.instance
+          .collection("mentorFavorites")
+          .doc(mentorId)
           .get();
 
-      Map<String, Map<String, dynamic>> customizations = {};
-      for (var doc in customizationsSnapshot.docs) {
-        String classId = doc['classId'];
-        customizations[classId] = {
-          'nickname': doc['nickname'],
-          'color': Color(int.parse(doc['color'])),
-        };
+      if (favSnap.exists) {
+        favoriteIds = Set<String>.from(favSnap.data()?["favorites"] ?? []);
+      } else {
+        favoriteIds = {};
       }
 
+      // --- Step 2: Load subjectMentors ---
       final subjectMentorSnapshot = await FirebaseFirestore.instance
-          .collection('subjectMentors')
-          .where('mentorId', isEqualTo: mentorId)
+          .collection("subjectMentors")
+          .where("mentorId", isEqualTo: mentorId)
           .get();
 
-      Map<String, List<Map<String, dynamic>>> tempDepartmentsData = {};
+      print("📥 Found ${subjectMentorSnapshot.docs.length} subjectMentor docs for mentorId=$mentorId");
+
+      if (subjectMentorSnapshot.docs.isEmpty) {
+        setState(() {
+          programmesData.clear();
+          isLoading = false;
+        });
+        return;
+      }
+
+      // --- Step 3: Load customizations ---
+      final customizationsSnap = await FirebaseFirestore.instance
+          .collection("mentorCustomizations")
+          .where("mentorId", isEqualTo: mentorId)
+          .get();
+
+      final Map<String, Map<String, dynamic>> customizations = {};
+      for (var doc in customizationsSnap.docs) {
+        final data = doc.data();
+        final sectionId = data['sectionId'];
+        if (sectionId != null) {
+          customizations[sectionId.toString()] = data;
+        }
+      }
+
+      // --- Step 4: Build all courses (no filtering yet) ---
+      Map<String, List<Map<String, dynamic>>> tempProgrammesData = {};
 
       for (var doc in subjectMentorSnapshot.docs) {
-        String departmentId = doc['departmentId'];
-        String subjectId = doc['subjectId'];
-        List<dynamic> classIds = doc['classIds'];
+        final data = doc.data();
 
-        final departmentDoc = await FirebaseFirestore.instance
-            .collection('departments')
-            .doc(departmentId)
-            .get();
-        if (!departmentDoc.exists) continue;
-        String departmentName = departmentDoc.data()?['name'] ?? 'Unknown Department';
+        final schoolId    = data['schoolId']?.toString();
+        final programmeId = data['programmeId']?.toString();
+        final subjectId   = data['subjectId']?.toString();
+        final sectionId   = data['sectionId']?.toString();
 
-        if (!tempDepartmentsData.containsKey(departmentName)) {
-          tempDepartmentsData[departmentName] = [];
+        if ([schoolId, programmeId, subjectId, sectionId].contains(null)) {
+          print("⚠️ Skipping subjectMentor ${doc.id}, missing ids → $data");
+          continue;
         }
 
-        final subjectDoc = await FirebaseFirestore.instance
-            .collection('departments')
-            .doc(departmentId)
-            .collection('subjects')
+        // --- Fetch programme ---
+        final programmeSnap = await FirebaseFirestore.instance
+            .collection("schools")
+            .doc(schoolId!)
+            .collection("programmes")
+            .doc(programmeId!)
+            .get();
+        if (!programmeSnap.exists) continue;
+        final programmeName = programmeSnap.data()?["name"] ?? "Unnamed Programme";
+
+        // --- Fetch subject ---
+        final subjectSnap = await FirebaseFirestore.instance
+            .collection("schools")
+            .doc(schoolId)
+            .collection("programmes")
+            .doc(programmeId)
+            .collection("subjects")
+            .doc(subjectId!)
+            .get();
+        if (!subjectSnap.exists) continue;
+        final subjectName = subjectSnap.data()?["name"] ?? "Unnamed Subject";
+
+        // --- Fetch section ---
+        final sectionSnap = await FirebaseFirestore.instance
+            .collection("schools")
+            .doc(schoolId)
+            .collection("programmes")
+            .doc(programmeId)
+            .collection("subjects")
             .doc(subjectId)
+            .collection("sections")
+            .doc(sectionId!)
             .get();
-        if (!subjectDoc.exists) continue;
-        String subjectName = subjectDoc.data()?['name'] ?? 'Unknown Subject';
+        if (!sectionSnap.exists) continue;
+        final sectionName = sectionSnap.data()?["name"] ?? "Unnamed Section";
 
-        for (var classId in classIds) {
-          final classDoc = await FirebaseFirestore.instance
-              .collection('departments')
-              .doc(departmentId)
-              .collection('subjects')
-              .doc(subjectId)
-              .collection('classes')
-              .doc(classId)
-              .get();
+        // --- Apply customization ---
+        final customization = customizations[sectionId];
+        final nickname = customization?['nickname'] ?? '';
+        final storedColor = customization?['color'];
 
-          if (!classDoc.exists) continue;
-          String className = classDoc.data()?['name'] ?? 'Unknown Class';
-
-          Color defaultColor = Colors.teal[400]!;
-          String nickname = '';
-
-          if (customizations.containsKey(classId)) {
-            nickname = customizations[classId]!['nickname'] ?? '';
-            defaultColor = customizations[classId]!['color'] ?? Colors.teal[400]!;
+        Color cardColor = Colors.teal.shade400;
+        if (storedColor != null) {
+          try {
+            if (storedColor is String && storedColor.startsWith('#')) {
+              cardColor = Color(int.parse(storedColor.replaceFirst('#', '0xff')));
+            } else {
+              cardColor = Color(int.parse(storedColor.toString()));
+            }
+          } catch (e) {
+            print("⚠️ Failed to parse color: $storedColor → $e");
           }
-
-          tempDepartmentsData[departmentName]!.add({
-            'subjectId': subjectId,
-            'subjectName': subjectName,
-            'className': className,
-            'classId': classId,
-            'departmentId': departmentId,
-            'nickname': nickname,
-            'color': defaultColor,
-          });
         }
+
+        final item = {
+          'programmeId': programmeId,
+          'subjectId': subjectId,
+          'sectionId': sectionId,
+          'subjectName': subjectName,
+          'sectionName': sectionName,
+          'nickname': nickname,
+          'color': cardColor,
+        };
+
+        tempProgrammesData.putIfAbsent(programmeName, () => []);
+        tempProgrammesData[programmeName]!.add(item);
       }
 
+      // --- Step 5: Apply favorites filter ---
+      Map<String, List<Map<String, dynamic>>> filteredData = {};
+      if (favoriteIds.isEmpty) {
+        // ✅ Show all courses if no favorites selected
+        filteredData = tempProgrammesData;
+      } else {
+        // ✅ Only keep starred ones
+        tempProgrammesData.forEach((programmeName, items) {
+          final favItems = items.where((item) {
+            final key = "${item['subjectId']}_${item['sectionId']}";
+            return favoriteIds.contains(key);
+          }).toList();
+          if (favItems.isNotEmpty) {
+            filteredData[programmeName] = favItems;
+          }
+        });
+      }
+
+      // --- Step 6: Update state ---
       setState(() {
-        departmentsData = tempDepartmentsData;
+        programmesData = filteredData;
         isLoading = false;
       });
-    } catch (e) {
+
+      print("🎉 Dashboard updated → ${programmesData.length} programmes");
+    } catch (e, st) {
+      print("🔥 Error fetching mentor data: $e");
+      print(st);
       setState(() {
         isLoading = false;
       });
     }
   }
-
 
 
   Future<void> _loadTheme() async {
@@ -183,8 +247,6 @@ class _MentorDashboardState extends State<MentorDashboard> {
       });
     }
   }
-
-
 
   void _showCustomizationDialog(Map<String, dynamic> item) {
     TextEditingController nicknameController = TextEditingController(text: item['nickname']);
@@ -226,15 +288,15 @@ class _MentorDashboardState extends State<MentorDashboard> {
 
                 await FirebaseFirestore.instance
                     .collection('mentorCustomizations')
-                    .doc('${mentorId}_${item['classId']}')
+                    .doc('${mentorId}_${item['sectionId']}')
                     .set({
                   'mentorId': mentorId,
-                  'classId': item['classId'],
-                  'departmentId': item['departmentId'],
+                  'sectionId': item['sectionId'],
+                  'programmeId': item['programmeId'],
                   'nickname': nicknameController.text,
                   'color': selectedMainColor?.value.toString(),
                   'subjectName': item['subjectName'],
-                  'className': item['className'],
+                  'sectionName': item['sectionName'],
                 });
 
                 Navigator.pop(context);
@@ -259,10 +321,8 @@ class _MentorDashboardState extends State<MentorDashboard> {
     return null;
   }
 
-
   @override
   Widget build(BuildContext context) {
-
     final theme = Theme.of(context);
     final isDark = _isDarkMode;
 
@@ -272,12 +332,23 @@ class _MentorDashboardState extends State<MentorDashboard> {
     return Scaffold(
       drawer: Drawer(
         backgroundColor: theme.canvasColor,
-        child: FutureBuilder<Map<String, dynamic>?>(
-          future: _fetchMentorProfile(),
+        child: StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('mentors')
+              .doc(FirebaseAuth.instance.currentUser!.uid)
+              .snapshots(),
           builder: (context, snapshot) {
-            final name = snapshot.data?['name'] ?? 'Mentor';
-            final email = snapshot.data?['email'] ?? '';
-            final profileUrl = snapshot.data?['profileUrl'] ?? '';
+            if (!snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (!snapshot.data!.exists) {
+              return const Center(child: Text("No mentor data found."));
+            }
+
+            final data = snapshot.data!.data() as Map<String, dynamic>;
+            final name = data['name'] ?? 'Mentor';
+            final email = data['email'] ?? '';
+            final profileUrl = data['profileUrl'] ?? '';
 
             ImageProvider<Object> avatarImage;
             if (profileUrl.isNotEmpty) {
@@ -322,7 +393,7 @@ class _MentorDashboardState extends State<MentorDashboard> {
                       context,
                       MaterialPageRoute(
                         builder: (context) => MentorCard(
-                          mentorId: FirebaseAuth.instance.currentUser!.uid, // or your stored mentorId
+                          mentorId: FirebaseAuth.instance.currentUser!.uid,
                         ),
                       ),
                     );
@@ -357,107 +428,169 @@ class _MentorDashboardState extends State<MentorDashboard> {
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
         elevation: 4,
-
-        iconTheme: const IconThemeData(color: Colors.white), //menu icon white color
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: isLoading
           ? Center(child: CircularProgressIndicator())
           : _selectedIndex == 0
-          ? ListView.separated(
+          ? Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        itemCount: departmentsData.length,
-        separatorBuilder: (_, __) => Divider(height: 32, color: Colors.grey[300]),
-        itemBuilder: (context, index) {
-          String departmentName = departmentsData.keys.elementAt(index);
-          List<dynamic> items = departmentsData[departmentName]!;
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                departmentName,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.teal[700],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ✅ Header row: Courses + All Courses
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  "Courses",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.teal,
+                  ),
                 ),
-              ),
-              SizedBox(height: 10),
-              ...items.map((item) {
-                Color cardColor = _parseColor(item['color']) ?? Colors.teal[400]!;
+                TextButton(
+                  onPressed: () async {
+                    final updated = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MentorAllCoursesScreen(
+                          mentorId: mentorId ?? '',
+                          //initialCourses: programmesData,
+                          initialFavorites: favoriteIds,
+                        ),
+                      ),
+                    );
+                    if (updated == true) {
+                      await _fetchProgrammesAndSections(mentorId!);
+                    }
+                  },
 
-                Color textColor = cardColor.computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
-                Color subtitleColor = cardColor.computeLuminance() > 0.5 ? Colors.black54 : Colors.white70;
-                return AnimatedContainer(
-                  duration: Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                  margin: const EdgeInsets.symmetric(vertical: 6),
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: cardColor.withOpacity(0.4),
-                        blurRadius: 6,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
+                  child: Text(
+                    "All Courses",
+                    style: TextStyle(
+                      color: Colors.teal,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  child: ListTile(
-                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    title: Text(
-                      item['nickname'].isNotEmpty ? item['nickname'] : item['subjectName'],
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: textColor,
-                      ),
-                    ),
-                    subtitle: Text(
-                      item['className'],
-                      style: TextStyle(
-                        color: subtitleColor,
-                        fontSize: 14,
-                      ),
-                    ),
-                    trailing: PopupMenuButton(
-                      icon: Icon(Icons.more_vert, color: textColor),
-                      onSelected: (value) {
-                        if (value == 'customize') {
-                          _showCustomizationDialog(item);
-                        }
-                      },
-                      itemBuilder: (context) => [
-                        PopupMenuItem(
-                          value: 'customize',
-                          child: Text('Customize'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // ✅ Courses list
+            Expanded(
+              child: ListView.separated(
+                itemCount: programmesData.length,
+                separatorBuilder: (_, __) =>
+                    Divider(height: 32, color: Colors.grey[300]),
+                itemBuilder: (context, index) {
+                  String programmeName =
+                  programmesData.keys.elementAt(index);
+                  List<dynamic> items = programmesData[programmeName]!;
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        programmeName,
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.teal[700],
                         ),
-                      ],
-                    ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => SubjectClassDetailsScreen(
-                            subjectName: item['subjectName'],
-                            className: item['className'],
-                            subjectId: item['subjectId'],   // Make sure you include this in your item
-                            classId: item['classId'],
-                            mentorId: mentorId ?? '',
+                      ),
+                      SizedBox(height: 10),
+                      ...items.map((item) {
+                        Color cardColor = _parseColor(item['color']) ??
+                            Colors.teal[400]!;
+                        Color textColor =
+                        cardColor.computeLuminance() > 0.5
+                            ? Colors.black87
+                            : Colors.white;
+                        Color subtitleColor =
+                        cardColor.computeLuminance() > 0.5
+                            ? Colors.black54
+                            : Colors.white70;
+
+                        return AnimatedContainer(
+                          duration: Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                          margin: const EdgeInsets.symmetric(vertical: 6),
+                          decoration: BoxDecoration(
                             color: cardColor,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: cardColor.withOpacity(0.4),
+                                blurRadius: 6,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
                           ),
-                        ),
-                      );
-                    },
-                  ),
-                );
-              }).toList(),
-            ],
-          );
-        },
+                          child: ListTile(
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            title: Text(
+                              item['nickname'].isNotEmpty
+                                  ? item['nickname']
+                                  : item['subjectName'],
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: textColor,
+                              ),
+                            ),
+                            subtitle: Text(
+                              item['sectionName'],
+                              style: TextStyle(
+                                color: subtitleColor,
+                                fontSize: 14,
+                              ),
+                            ),
+                            trailing: PopupMenuButton(
+                              icon: Icon(Icons.more_vert, color: textColor),
+                              onSelected: (value) {
+                                if (value == 'customize') {
+                                  _showCustomizationDialog(item);
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                PopupMenuItem(
+                                  value: 'customize',
+                                  child: Text('Customize'),
+                                ),
+                              ],
+                            ),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      SubjectSectionDetailsScreen(
+                                        subjectName: item['subjectName'],
+                                        sectionName: item['sectionName'],
+                                        subjectId: item['subjectId'],
+                                        sectionId: item['sectionId'],
+                                        mentorId: mentorId ?? '',
+                                        color: cardColor,
+                                      ),
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       )
           : _screens[_selectedIndex],
-
       bottomNavigationBar: BottomNavigationBar(
         items: [
           BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
@@ -472,3 +605,404 @@ class _MentorDashboardState extends State<MentorDashboard> {
     );
   }
 }
+
+
+
+
+class MentorAllCoursesScreen extends StatefulWidget {
+  final String mentorId;
+  final Map<String, List<Map<String, dynamic>>>? initialCourses;
+  final Set<String>? initialFavorites;
+
+  const MentorAllCoursesScreen({
+    super.key,
+    required this.mentorId,
+    this.initialCourses,
+    this.initialFavorites,
+  });
+
+  @override
+  State<MentorAllCoursesScreen> createState() => _MentorAllCoursesScreenState();
+}
+
+class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
+  String searchQuery = '';
+  String? selectedProgramme; // for dropdown filter
+  Set<String> favoriteIds = {};
+  bool favoritesChanged = false;
+  bool isLoading = true;
+
+  Map<String, List<Map<String, dynamic>>> allCourses = {};
+  List<String> programmeList = []; //  store programme names
+
+  @override
+  void initState() {
+    super.initState();
+
+    // If the dashboard has already uploaded data, display it directly first
+    if (widget.initialCourses != null) {
+      //allCourses = widget.initialCourses!;
+      programmeList = allCourses.keys.toList();
+      favoriteIds = widget.initialFavorites ?? {};
+      //isLoading = false; // 🔥 no need to refresh
+    }
+
+    // Refresh the background again to ensure it is the latest
+    _loadFavorites();
+    _fetchAllCourses();
+  }
+
+  Future<void> _loadFavorites() async {
+    final snap = await FirebaseFirestore.instance
+        .collection('mentorFavorites')
+        .doc(widget.mentorId)
+        .get();
+    if (snap.exists) {
+      final data = snap.data();
+      setState(() {
+        favoriteIds = Set<String>.from(data?['favorites'] ?? []);
+      });
+    }
+  }
+
+  Future<void> _fetchAllCourses() async {
+    try {
+      final subjectMentorSnapshot = await FirebaseFirestore.instance
+          .collection("subjectMentors")
+          .where("mentorId", isEqualTo: widget.mentorId)
+          .get();
+
+      Map<String, List<Map<String, dynamic>>> tempData = {};
+
+      for (var doc in subjectMentorSnapshot.docs) {
+        final data = doc.data();
+        final schoolId = data['schoolId']?.toString();
+        final programmeId = data['programmeId']?.toString();
+        final subjectId = data['subjectId']?.toString();
+        final sectionId = data['sectionId']?.toString();
+
+        if ([schoolId, programmeId, subjectId, sectionId].contains(null))
+          continue;
+
+        // take programme
+        final progSnap = await FirebaseFirestore.instance
+            .collection("schools")
+            .doc(schoolId!)
+            .collection("programmes")
+            .doc(programmeId!)
+            .get();
+        if (!progSnap.exists) continue;
+        final progName = progSnap.data()?["name"] ?? "Unnamed Programme";
+
+        // take subject
+        final subjSnap = await FirebaseFirestore.instance
+            .collection("schools")
+            .doc(schoolId)
+            .collection("programmes")
+            .doc(programmeId)
+            .collection("subjects")
+            .doc(subjectId!)
+            .get();
+        if (!subjSnap.exists) continue;
+        final subjName = subjSnap.data()?["name"] ?? "Unnamed Subject";
+
+        // take section
+        final secSnap = await FirebaseFirestore.instance
+            .collection("schools")
+            .doc(schoolId)
+            .collection("programmes")
+            .doc(programmeId)
+            .collection("subjects")
+            .doc(subjectId)
+            .collection("sections")
+            .doc(sectionId!)
+            .get();
+        if (!secSnap.exists) continue;
+        final secName = secSnap.data()?["name"] ?? "Unnamed Section";
+
+        final item = {
+          'programmeId': programmeId,
+          'subjectId': subjectId,
+          'sectionId': sectionId,
+          'subjectName': subjName,
+          'sectionName': secName,
+          'color': Colors.teal, // default
+        };
+
+        tempData.putIfAbsent(progName, () => []);
+        tempData[progName]!.add(item);
+      }
+
+      setState(() {
+        allCourses = tempData;
+        programmeList = tempData.keys.toList(); //  build programme dropdown
+        isLoading = false;
+      });
+    } catch (e) {
+      print("❌ Error loading all courses: $e");
+      setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _toggleFavorite(String subjectId, String sectionId) async {
+    final key = "${subjectId}_$sectionId";
+    setState(() {
+      if (favoriteIds.contains(key)) {
+        favoriteIds.remove(key);
+      } else {
+        favoriteIds.add(key);
+      }
+      favoritesChanged = true;
+    });
+
+    await FirebaseFirestore.instance
+        .collection('mentorFavorites')
+        .doc(widget.mentorId)
+        .set({
+      'favorites': favoriteIds.toList(),
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pop(context, favoritesChanged);
+        return false;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text("All Courses"),
+          actions: [
+            // 🔎 search
+            IconButton(
+              icon: Icon(Icons.search),
+              onPressed: () async {
+                final query = await showSearch<String>(
+                  context: context,
+                  delegate: _CourseSearchDelegate(
+                    allCourses: allCourses,
+                    favoriteIds: favoriteIds,
+                  ),
+                );
+                if (query != null) {
+                  setState(() => searchQuery = query);
+                }
+              },
+            ),
+          ],
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back),
+            onPressed: () {
+              Navigator.pop(context, favoritesChanged);
+            },
+          ),
+        ),
+        body: isLoading
+            ? Center(child: CircularProgressIndicator())
+            : Column(
+          children: [
+            // 🔽 Programme filter dropdown
+            if (programmeList.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: DropdownButton<String>(
+                  value: selectedProgramme,
+                  hint: Text("Filter by Programme"),
+                  isExpanded: true,
+                  items: programmeList
+                      .map((p) =>
+                      DropdownMenuItem(
+                        value: p,
+                        child: Text(p),
+                      ))
+                      .toList(),
+                  onChanged: (val) {
+                    setState(() => selectedProgramme = val);
+                  },
+                ),
+              ),
+
+            // ✅ List
+            Expanded(
+              child: ListView.builder(
+                itemCount: allCourses.length,
+                itemBuilder: (context, index) {
+                  final progName = allCourses.keys.elementAt(index);
+
+                  // 🔥 Apply programme filter
+                  if (selectedProgramme != null &&
+                      progName != selectedProgramme) {
+                    return SizedBox.shrink();
+                  }
+
+                  final items = allCourses[progName]!;
+                  final filtered = items.where((e) {
+                    final subject =
+                    (e['subjectName'] ?? '').toLowerCase();
+                    final section =
+                    (e['sectionName'] ?? '').toLowerCase();
+                    final prog = progName.toLowerCase();
+                    return subject
+                        .contains(searchQuery.toLowerCase()) ||
+                        section
+                            .contains(searchQuery.toLowerCase()) ||
+                        prog.contains(searchQuery.toLowerCase());
+                  }).toList();
+
+                  if (filtered.isEmpty) return SizedBox.shrink();
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Text(
+                          progName,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.teal[700],
+                          ),
+                        ),
+                      ),
+                      ...filtered.map((item) {
+                        final favKey =
+                            "${item['subjectId']}_${item['sectionId']}";
+                        final isFav = favoriteIds.contains(favKey);
+
+                        return Card(
+                          child: ListTile(
+                            title: Text(item['subjectName']),
+                            subtitle: Text(item['sectionName']),
+                            trailing: IconButton(
+                              icon: Icon(
+                                isFav
+                                    ? Icons.star
+                                    : Icons.star_border,
+                                color: isFav
+                                    ? Colors.yellow[700]
+                                    : Colors.grey,
+                              ),
+                              onPressed: () =>
+                                  _toggleFavorite(
+                                    item['subjectId'],
+                                    item['sectionId'],
+                                  ),
+                            ),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      SubjectSectionDetailsScreen(
+                                        subjectName: item['subjectName'],
+                                        sectionName: item['sectionName'],
+                                        subjectId: item['subjectId'],
+                                        sectionId: item['sectionId'],
+                                        mentorId: widget.mentorId,
+                                        color: item['color'] ?? Colors.teal,
+                                      ),
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CourseSearchDelegate extends SearchDelegate<String> {
+  final Map<String, List<Map<String, dynamic>>> allCourses;
+  final Set<String> favoriteIds;
+
+  _CourseSearchDelegate({
+    required this.allCourses,
+    required this.favoriteIds,
+  });
+
+  @override
+  List<Widget>? buildActions(BuildContext context) {
+    return [
+      IconButton(
+        icon: const Icon(Icons.clear),
+        onPressed: () {
+          query = '';
+        },
+      ),
+    ];
+  }
+
+  @override
+  Widget? buildLeading(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.arrow_back),
+      onPressed: () {
+        close(context, query); // return current query
+      },
+    );
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    return _buildFilteredList();
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    return _buildFilteredList();
+  }
+
+  Widget _buildFilteredList() {
+    final normalizedQuery = query.trim().toLowerCase(); // 统一处理
+    final results = <Map<String, dynamic>>[];
+
+    allCourses.forEach((progName, items) {
+      for (var item in items) {
+        final subject = (item['subjectName'] ?? '').toLowerCase();
+
+        if (normalizedQuery.isEmpty || subject.contains(normalizedQuery)) {
+          results.add({
+            ...item, // 保留原始数据
+            'programmeName': progName, // 额外加 programmeName 方便展示
+          });
+        }
+      }
+    });
+
+    if (results.isEmpty) {
+      return const Center(child: Text("No results found"));
+    }
+
+    return ListView.builder(
+      itemCount: results.length,
+      itemBuilder: (context, index) {
+        final item = results[index];
+        final favKey = "${item['subjectId']}_${item['sectionId']}";
+        final isFav = favoriteIds.contains(favKey);
+
+        return ListTile(
+          title: Text(item['subjectName']),
+          subtitle: Text("${item['sectionName']} • ${item['programmeName']}"),
+          trailing: Icon(
+            isFav ? Icons.star : Icons.star_border,
+            color: isFav ? Colors.yellow[700] : Colors.grey,
+          ),
+          onTap: () {
+            close(context, query); // 这里还是返回 query
+          },
+        );
+      },
+    );
+  }
+}
+

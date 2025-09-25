@@ -1,447 +1,667 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class SubjectData {
-  final String subjectId;
-  final String subjectName;
-  final String departmentId;
-  final String departmentName;
-
-  SubjectData({
-    required this.subjectId,
-    required this.subjectName,
-    required this.departmentId,
-    required this.departmentName,
-  });
-}
-
 class AssignmentEntry {
   final String id;
   final String name;
   final String role; // "Student" or "Mentor"
-  final String classId;
-  final String className;
-  final SubjectData subject;
+  final String schoolId;
+  final String programmeId;
+  final String subjectId;
+  final String sectionId;
+  final String studentIdNo;
 
   AssignmentEntry({
     required this.id,
     required this.name,
     required this.role,
-    required this.classId,
-    required this.className,
-    required this.subject,
+    required this.schoolId,
+    required this.programmeId,
+    required this.subjectId,
+    required this.sectionId,
+    this.studentIdNo = '',
   });
 }
 
 class AssignmentsDashboardScreen extends StatefulWidget {
   @override
-  _AssignmentsDashboardScreenState createState() => _AssignmentsDashboardScreenState();
+  _AssignmentsDashboardScreenState createState() =>
+      _AssignmentsDashboardScreenState();
 }
 
-class _AssignmentsDashboardScreenState extends State<AssignmentsDashboardScreen> {
+class _AssignmentsDashboardScreenState
+    extends State<AssignmentsDashboardScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // Overlay stuff
+  final LayerLink _schoolLink = LayerLink();
+  OverlayEntry? _schoolOverlay;
 
-  late Future<Map<String,
-      Map<String,
-          Map<String, List<AssignmentEntry>>>>> _futureGroupedAssignments;
+  final LayerLink _programmeLink = LayerLink();
+  OverlayEntry? _programmeOverlay;
+
+  String selectedSchoolId = '';
+  String selectedProgrammeId = '';
+  String searchQuery = '';
+
+  List<Map<String, dynamic>> schools = [];
+  List<Map<String, dynamic>> programmes = [];
+
+  late Future<List<AssignmentEntry>> _futureAssignments;
+
+  // 🔹 make cache available everywhere
+  final Map<String, String> subjectNameCache = {};
+
+  // Controllers
+  final TextEditingController _schoolController = TextEditingController();
+  final TextEditingController _programmeController = TextEditingController();
+
+ // Autocomplete filtered lists
+  List<Map<String, dynamic>> filteredSchools = [];
+  List<Map<String, dynamic>> filteredProgrammes = [];
 
   @override
   void initState() {
     super.initState();
-    _futureGroupedAssignments = _fetchAndGroupAssignmentsByDepartment();
+    _loadSchools();
   }
 
-  Future<String> _getUserName(String collection, String userId) async {
-    final doc = await _firestore.collection(collection).doc(userId).get();
-    if (doc.exists) {
-      final data = doc.data()!;
-      return data['name'] ?? 'Unknown Name';
-    }
-    return 'Unknown Name';
+  @override
+  void dispose() {
+    _schoolController.dispose();
+    _programmeController.dispose();
+    super.dispose();
   }
 
-  Future<String> _getClassName(String departmentId, String subjectId,
-      String classId) async {
-    final classDoc = await _firestore
-        .collection('departments')
-        .doc(departmentId)
-        .collection('subjects')
-        .doc(subjectId)
-        .collection('classes')
-        .doc(classId)
-        .get();
+  void _showSchoolOverlay() {
+    _hideSchoolOverlay();
 
-    if (classDoc.exists && classDoc.data()!.containsKey('name')) {
-      return classDoc.data()!['name'] as String;
-    }
-    return classId; // fallback to id if no name found
-  }
-
-  Future<SubjectData> _fetchSubjectData(String departmentId,
-      String subjectId) async {
-    final deptDoc = await _firestore
-        .collection('departments')
-        .doc(departmentId)
-        .get();
-    final departmentName = deptDoc.exists && deptDoc.data()!.containsKey('name')
-        ? deptDoc.data()!['name'] as String
-        : 'Unknown Department';
-
-    final subjectDoc =
-    await _firestore.collection('departments').doc(departmentId).collection(
-        'subjects').doc(subjectId).get();
-    final subjectName = subjectDoc.exists &&
-        subjectDoc.data()!.containsKey('name')
-        ? subjectDoc.data()!['name'] as String
-        : 'Unknown Subject';
-
-    return SubjectData(
-      subjectId: subjectId,
-      subjectName: subjectName,
-      departmentId: departmentId,
-      departmentName: departmentName,
+    final overlay = OverlayEntry(
+      builder: (context) => Positioned(
+        width: MediaQuery.of(context).size.width - 32,
+        child: CompositedTransformFollower(
+          link: _schoolLink,
+          showWhenUnlinked: false,
+          offset: const Offset(0, 48),
+          child: Material(
+            elevation: 4,
+            child: ListView(
+              shrinkWrap: true,
+                children: filteredSchools.isEmpty
+                ? [ListTile(title: Text("No schools found"))]
+                    : filteredSchools.map((school) {
+                return ListTile(
+                  title: Text(school['name']),
+                  onTap: () {
+                    setState(() {
+                      selectedSchoolId = school['id'];
+                      _schoolController.text = school['name'];
+                      filteredSchools = schools;
+                      selectedProgrammeId = '';
+                      _programmeController.clear();
+                      _futureAssignments = Future.value([]); // reset until programme chosen
+                      _loadProgrammes(selectedSchoolId);
+                    });
+                    _hideSchoolOverlay();  //  close overlay after selection
+                  },
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ),
     );
+
+    Overlay.of(context).insert(overlay);
+    _schoolOverlay = overlay;
   }
 
-  Future<Map<String,
-      Map<String,
-          Map<String,
-              List<
-                  AssignmentEntry>>>>> _fetchAndGroupAssignmentsByDepartment() async {
-    Map<String, Map<String, Map<String, List<AssignmentEntry>>>> grouped = {};
+  void _hideSchoolOverlay() {
+    _schoolOverlay?.remove();
+    _schoolOverlay = null;
+  }
 
-    final enrollmentsSnapshot = await _firestore.collection(
-        'subjectEnrollments').get();
-    for (var doc in enrollmentsSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
-      final departmentId = data['departmentId'];
-      final subjectId = data['subjectId'];
-      final studentId = data['studentId'];
-      final classId = data['classId'];
+  void _showProgrammeOverlay() {
+    _hideProgrammeOverlay();
 
-      final studentName = await _getUserName('students', studentId);
-      final subject = await _fetchSubjectData(departmentId, subjectId);
-      final className = await _getClassName(departmentId, subjectId, classId);
+    final overlay = OverlayEntry(
+      builder: (context) => Positioned(
+        width: MediaQuery.of(context).size.width - 32,
+        child: CompositedTransformFollower(
+          link: _programmeLink,
+          showWhenUnlinked: false,
+          offset: const Offset(0, 48),
+          child: Material(
+            elevation: 4,
+            child: ListView(
+              shrinkWrap: true,
+              children: filteredProgrammes.map((programme) {
+                return ListTile(
+                  title: Text(programme['name']),
+                  onTap: () {
+                    setState(() {
+                      selectedProgrammeId = programme['id'];
+                      _programmeController.text = programme['name'];
+                      filteredProgrammes = programmes;
+                      _futureAssignments = _fetchAssignments();
+                    });
+                    _hideProgrammeOverlay();
+                  },
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ),
+    );
 
-      final entry = AssignmentEntry(
-        id: studentId,
-        name: studentName,
-        role: 'Student',
-        classId: classId,
-        className: className,
-        subject: subject,
-      );
+    Overlay.of(context).insert(overlay);
+    _programmeOverlay = overlay;
+  }
 
-      grouped.putIfAbsent(departmentId, () => {});
-      grouped[departmentId]!.putIfAbsent(subjectId, () => {});
-      grouped[departmentId]![subjectId]!.putIfAbsent(classId, () => []);
-      grouped[departmentId]![subjectId]![classId]!.add(entry);
+  void _hideProgrammeOverlay() {
+    _programmeOverlay?.remove();
+    _programmeOverlay = null;
+  }
+
+
+
+  Future<void> _loadSchools() async {
+    final snapshot = await _firestore.collection('schools').get();
+    setState(() {
+      schools = snapshot.docs
+          .map((d) => {'id': d.id, 'name': d['name'] ?? 'Unnamed School'})
+          .toList();
+    });
+  }
+
+  Future<void> _loadProgrammes(String schoolId) async {
+    final snapshot = await _firestore
+        .collection('schools')
+        .doc(schoolId)
+        .collection('programmes')
+        .get();
+    setState(() {
+      programmes = snapshot.docs
+          .map((d) => {'id': d.id, 'name': d['name'] ?? 'Unnamed Programme'})
+          .toList();
+    });
+  }
+
+  Future<Map<String, dynamic>> _loadUserNames(String collection) async {
+    final snapshot = await _firestore.collection(collection).get();
+    final map = <String, dynamic>{};
+    for (var doc in snapshot.docs) {
+      final data = doc.data();
+      if (data['disabled'] != true) {
+        map[doc.id] = {
+          'name': data['name'] ?? 'Unknown',
+          'studentIdNo': data['studentIdNo'] ?? ''
+        };
+      }
+    }
+    return map;
+  }
+
+  Future<String> _getSubjectName(String schoolId, String programmeId, String subjectId) async {
+    try {
+      final doc = await _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('programmes')
+          .doc(programmeId)
+          .collection('subjects')
+          .doc(subjectId)
+          .get();
+      if (doc.exists) return doc['name'] ?? subjectId;
+    } catch (_) {}
+    return subjectId;
+  }
+
+  Future<String> _getSectionName(String schoolId, String programmeId, String subjectId, String sectionId) async {
+    try {
+      final doc = await _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('programmes')
+          .doc(programmeId)
+          .collection('subjects')
+          .doc(subjectId)
+          .collection('sections')
+          .doc(sectionId)
+          .get();
+      if (doc.exists) return doc['name'] ?? sectionId;
+    } catch (_) {}
+    return sectionId;
+  }
+
+
+  Future<List<AssignmentEntry>> _fetchAssignments() async {
+    final studentData = await _loadUserNames("students");
+    final mentorData = await _loadUserNames("mentors");
+
+    List<AssignmentEntry> entries = [];
+
+    // 🔹 Students
+    Query studentQuery = _firestore.collection('subjectEnrollments');
+    if (selectedSchoolId.isNotEmpty) {
+      studentQuery = studentQuery.where('schoolId', isEqualTo: selectedSchoolId);
+    }
+    if (selectedProgrammeId.isNotEmpty) {
+      studentQuery = studentQuery.where('programmeId', isEqualTo: selectedProgrammeId);
     }
 
-    final mentorsSnapshot = await _firestore.collection('subjectMentors').get();
-    for (var doc in mentorsSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
-      final departmentId = data['departmentId'];
-      final subjectId = data['subjectId'];
-      final mentorId = data['mentorId'];
-      final classId = data['classId'] ??
-          'No Class'; // use 'No Class' if not assigned
+    final enrollSnap = await studentQuery.get();
+    for (var doc in enrollSnap.docs) {
+      final d = doc.data() as Map<String, dynamic>;
+      final sid = d['studentId'];
+      if (sid == null || !studentData.containsKey(sid)) continue;
 
-      final mentorName = await _getUserName('mentors', mentorId);
-      final subject = await _fetchSubjectData(departmentId, subjectId);
-      final className = classId == 'No Class'
-          ? 'No Class'
-          : await _getClassName(departmentId, subjectId, classId);
+      entries.add(AssignmentEntry(
+        id: sid,
+        name: studentData[sid]['name'],
+        role: 'Student',
+        schoolId: d['schoolId'],
+        programmeId: d['programmeId'],
+        subjectId: d['subjectId'],
+        sectionId: d['sectionId'],
+        studentIdNo: studentData[sid]['studentIdNo'],
+      ));
+    }
 
-      final entry = AssignmentEntry(
-        id: mentorId,
-        name: mentorName,
+    // 🔹 Mentors
+    Query mentorQuery = _firestore.collection('subjectMentors');
+    if (selectedSchoolId.isNotEmpty) {
+      mentorQuery = mentorQuery.where('schoolId', isEqualTo: selectedSchoolId);
+    }
+    if (selectedProgrammeId.isNotEmpty) {
+      mentorQuery = mentorQuery.where('programmeId', isEqualTo: selectedProgrammeId);
+    }
+
+    final mentorSnap = await mentorQuery.get();
+    for (var doc in mentorSnap.docs) {
+      final d = doc.data() as Map<String, dynamic>;
+      final mid = d['mentorId'];
+      if (mid == null || !mentorData.containsKey(mid)) continue;
+
+      entries.add(AssignmentEntry(
+        id: mid,
+        name: mentorData[mid]['name'],
         role: 'Mentor',
-        classId: classId,
-        className: className,
-        subject: subject,
-      );
+        schoolId: d['schoolId'],
+        programmeId: d['programmeId'],
+        subjectId: d['subjectId'],
+        sectionId: d['sectionId'] ?? '',
+      ));
+    }
 
-      grouped.putIfAbsent(departmentId, () => {});
-      grouped[departmentId]!.putIfAbsent(subjectId, () => {});
-      grouped[departmentId]![subjectId]!.putIfAbsent(classId, () => []);
-      if (!grouped[departmentId]![subjectId]![classId]!.any((e) =>
-      e.id == mentorId && e.role == 'Mentor')) {
-        grouped[departmentId]![subjectId]![classId]!.add(entry);
+    // ✅ NOW build subjectNameCache after entries exist
+    for (var e in entries) {
+      if (!subjectNameCache.containsKey(e.subjectId)) {
+        subjectNameCache[e.subjectId] =
+        await _getSubjectName(e.schoolId, e.programmeId, e.subjectId);
       }
     }
 
-    return grouped;
+    return entries;
   }
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Assignments Overview',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.2,
-          ),
+        appBar: AppBar(
+          title: Text("Assignments Overview"),
+          backgroundColor: Colors.deepPurple,
+          foregroundColor: Colors.white,
         ),
-        backgroundColor: Colors.lightBlue[100],
-        elevation: 4,
-      ),
-      body: FutureBuilder<
-          Map<String, Map<String, Map<String, List<AssignmentEntry>>>>>(
-        future: _futureGroupedAssignments,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator(
-                color: Colors.indigo.shade700));
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Text('Error: ${snapshot.error}',
-                  style: TextStyle(color: Colors.redAccent)),
-            );
-          }
-
-          final grouped = snapshot.data ?? {};
-          if (grouped.isEmpty) {
-            return Center(
-              child: Text(
-                'No assignments found.',
-                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-              ),
-            );
-          }
-
-          final sortedDeptIds = grouped.keys.toList()
-            ..sort((a, b) {
-              final aName = grouped[a]!.values.first.values.first[0].subject
-                  .departmentName;
-              final bName = grouped[b]!.values.first.values.first[0].subject
-                  .departmentName;
-              return aName.compareTo(bName);
-            });
-
-          return ListView.builder(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            itemCount: sortedDeptIds.length,
-            itemBuilder: (context, deptIndex) {
-              final deptId = sortedDeptIds[deptIndex];
-              final subjectsMap = grouped[deptId]!;
-
-              final sortedSubjectIds = subjectsMap.keys.toList()
-                ..sort((a, b) {
-                  final aName = subjectsMap[a]!.values.first[0].subject
-                      .subjectName;
-                  final bName = subjectsMap[b]!.values.first[0].subject
-                      .subjectName;
-                  return aName.compareTo(bName);
-                });
-
-              return Card(
-                margin: EdgeInsets.symmetric(vertical: 10),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
-                elevation: 5,
-                shadowColor: Colors.indigo.shade200,
-                child: Theme(
-                  data: Theme.of(context).copyWith(
-                      dividerColor: Colors.transparent),
-                  child: ExpansionTile(
-                    tilePadding: EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 12),
-                    collapsedBackgroundColor: Colors.indigo.shade100,
-                    backgroundColor: Colors.indigo.shade50,
-                    collapsedShape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                    title: Text(
-                      subjectsMap.values.first.values.first[0].subject
-                          .departmentName,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.indigo.shade900,
-                        letterSpacing: 1.1,
-                      ),
+        body: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () {
+            FocusScope.of(context).unfocus(); // close keyboard
+            _hideSchoolOverlay();
+            _hideProgrammeOverlay();
+          },
+          child: Column(
+            children: [
+          // 🔹 School Search Field
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Select School"),
+                CompositedTransformTarget(
+                  link: _schoolLink,
+                  child: TextField(
+                    controller: _schoolController,
+                    decoration: InputDecoration(
+                      hintText: "Type school name",
+                      prefixIcon: Icon(Icons.school),
+                      border: OutlineInputBorder(),
                     ),
-                    children: sortedSubjectIds.where((subjectId) {
-                      final classesMap = subjectsMap[subjectId]!;
-                      return classesMap.values.any((entries) =>
-                      entries.isNotEmpty);
-                    }).map((subjectId) {
-                      final classesMap = subjectsMap[subjectId]!;
-                      final sortedClassIds = classesMap.keys
-                          .where((classId) =>
-                      classId != 'No Class') // filter out no class
-                          .toList()
-                        ..sort();
+                    onTap: () {
+                      setState(() => filteredSchools = schools);
+                      _showSchoolOverlay();
+                    },
+                    onChanged: (val) {
+                      setState(() {
+                        if (val.isEmpty) {
+                          // Reset to show full list when field is cleared
+                          filteredSchools = schools;
+                        } else {
+                          filteredSchools = schools
+                              .where((s) =>
+                              (s['name'] as String).toLowerCase().contains(val.toLowerCase()))
+                              .toList();
+                        }
+                      });
+                      _showSchoolOverlay();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
 
-                      final subjectName = classesMap.values.first[0].subject
-                          .subjectName;
 
-                      //shows mentors name
-                      final mentors = classesMap.entries
-                          .expand((entry) => entry.value)
-                          .where((e) => e.role == 'Mentor')
-                          .toList();
+// 🔹 Programme Search Field
+          if (selectedSchoolId.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Select Programme"),
+                  CompositedTransformTarget(
+                    link: _programmeLink,
+                    child: TextField(
+                      controller: _programmeController,
+                      decoration: InputDecoration(
+                        hintText: "Type programme name",
+                        prefixIcon: Icon(Icons.menu_book),
+                        border: OutlineInputBorder(),
+                      ),
+                      onTap: () {
+                        setState(() => filteredProgrammes = programmes);
+                        _showProgrammeOverlay();
+                      },
+                      onChanged: (val) {
+                        setState(() {
+                          if (val.isEmpty) {
+                            filteredProgrammes = programmes;
+                          } else {
+                            filteredProgrammes = programmes
+                                .where((p) =>
+                                (p['name'] as String).toLowerCase().contains(val.toLowerCase()))
+                                .toList();
+                          }
+                        });
+                        _showProgrammeOverlay();
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
-                      return Padding(
-                        padding: const EdgeInsets.only(
-                            left: 12, right: 12, bottom: 8),
-                        child: Card(
-                          elevation: 2,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
+
+
+          // 🔹 Search Bar
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: TextField(
+              decoration: InputDecoration(
+                labelText: "Search by Subject Name or Mentor Name",
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (val) =>
+                  setState(() => searchQuery = val.toLowerCase()),
+            ),
+          ),
+
+          // 🔹 Data View
+          Expanded(
+            child: (selectedSchoolId.isEmpty || selectedProgrammeId.isEmpty)
+                ? Center(
+              child: Text(
+                "Please select a school and programme",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              ),
+            )
+                : FutureBuilder<List<AssignmentEntry>>(
+              future: _futureAssignments,
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return Center(child: CircularProgressIndicator());
+                }
+
+                var entries = snapshot.data!;
+
+                // Filters
+                if (searchQuery.isNotEmpty) {
+                  entries = entries.where((e) {
+                    final subjName = subjectNameCache[e.subjectId]?.toLowerCase() ?? '';
+                    final matchesSubject = subjName.contains(searchQuery);
+                    final matchesMentor = e.role == 'Mentor' && e.name.toLowerCase().contains(searchQuery);
+                    return matchesSubject || matchesMentor;
+                  }).toList();
+                }
+
+
+                if (entries.isEmpty) {
+                  return Center(child: Text("No assignments found."));
+                }
+
+                // Group by subject → section
+                final Map<String, Map<String, List<AssignmentEntry>>> grouped =
+                {};
+                for (var e in entries) {
+                  grouped.putIfAbsent(e.subjectId, () => {});
+                  grouped[e.subjectId]!.putIfAbsent(e.sectionId, () => []);
+                  grouped[e.subjectId]![e.sectionId]!.add(e);
+                }
+
+                return ListView(
+                  children: grouped.entries.map((subjectEntry) {
+                    final subjectId = subjectEntry.key;
+                    final sections = subjectEntry.value;
+
+                    // Mentors unique per subject
+                    final Map<String, Set<String>> mentorSections = {};
+                    for (var secEntry in sections.entries) {
+                      for (var e in secEntry.value) {
+                        if (e.role == 'Mentor') {
+                          mentorSections.putIfAbsent(e.name, () => {});
+                          mentorSections[e.name]!.add(e.sectionId);
+                        }
+                      }
+                    }
+
+                    final firstEntry = sections.values.first.first;
+                    return FutureBuilder<String>(
+                      future: _getSubjectName(firstEntry.schoolId, firstEntry.programmeId, subjectId),
+                      builder: (context, subjectSnap) {
+                        final subjectName = subjectSnap.data ?? subjectId;
+
+
+                        return Card(
+                          margin: EdgeInsets.all(10),
                           child: ExpansionTile(
-                            tilePadding: EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 10),
-                            collapsedBackgroundColor: Colors.indigo.shade200,
-                            backgroundColor: Colors.indigo.shade100,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            collapsedShape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            title: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    subjectName,
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.indigo.shade900,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                if (mentors.isNotEmpty)
-                                  ...mentors.map((mentor) =>
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                            left: 8.0),
-                                        child: Text(
-                                          mentor.name,
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w700,
-                                            color: Colors.indigo.shade900,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      )),
-                              ],
-                            ),
+                            title: Text("Subject: $subjectName"),
+                            subtitle: mentorSections.isNotEmpty
+                                ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: mentorSections.entries.map((m) {
+                                final mentorName = m.key;
+                                final sectionIds = m.value.toList();
 
-                            children: sortedClassIds.where((classId) {
-                              final entries = classesMap[classId]!;
-                              return entries.any((e) =>
-                              e.role == 'Student'); // only show classes with students
-                            }).map((classId) {
-                              final entries = classesMap[classId]!;
-
-                              // only keep students
-                              final studentEntries = entries.where((e) =>
-                              e.role == 'Student').toList();
-                              studentEntries.sort((a, b) =>
-                                  a.name.compareTo(b.name));
-
-                              final studentCount = studentEntries.length;
-
-                              return Container(
-                                margin: EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: Colors.indigo.shade50,
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.indigo.shade100,
-                                      blurRadius: 6,
-                                      offset: Offset(0, 3),
-                                    ),
-                                  ],
-                                ),
-                                child: ExpansionTile(
-                                  tilePadding: EdgeInsets.symmetric(
-                                      horizontal: 20, vertical: 8),
-                                  title: Row(
-                                    mainAxisAlignment: MainAxisAlignment
-                                        .spaceBetween,
-                                    children: [
-                                      Flexible(
-                                        child: Text(
-                                          'Class: ${studentEntries[0]
-                                              .className}',
-                                          style: TextStyle(
-                                            fontSize: 17,
-                                            fontWeight: FontWeight.w700,
-                                            color: Colors.indigo.shade700,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      Container(
-                                        padding: EdgeInsets.symmetric(
-                                            horizontal: 12, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: Colors.indigo.shade200,
-                                          borderRadius: BorderRadius.circular(
-                                              12),
-                                        ),
-                                        child: Text(
-                                          'Students: $studentCount',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: Colors.indigo.shade900,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  children: studentEntries.map((entry) {
-                                    return ListTile(
-                                      leading: CircleAvatar(
-                                        radius: 22,
-                                        backgroundColor: Colors.blue.shade400,
-                                        child: Icon(
-                                          Icons.person,
-                                          color: Colors.white,
-                                          size: 24,
-                                        ),
-                                      ),
-                                      title: Text(
-                                        entry.name,
-                                        style: TextStyle(
-                                          color: Colors.blue.shade900,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                                      dense: true,
-                                      contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 20, vertical: 0),
+                                // Fetch all section names
+                                return FutureBuilder<List<String>>(
+                                  future: Future.wait(sectionIds.map((secId) {
+                                    final firstEntry = sections[secId]!.first;
+                                    return _getSectionName(
+                                      firstEntry.schoolId,
+                                      firstEntry.programmeId,
+                                      subjectId,
+                                      secId,
                                     );
-                                  }).toList(),
+                                  })),
+                                  builder: (context, secSnap) {
+                                    if (!secSnap.hasData) return Text("$mentorName (Loading sections...)");
+                                    final sectionNames = secSnap.data!;
+                                    return Text(
+                                      "$mentorName (Sections: ${sectionNames.join(', ')})",
+                                      style: TextStyle(fontSize: 13),
+                                    );
+                                  },
+                                );
+                              }).toList(),
+                            )
+                                : Text("No mentors assigned"),
+
+                            children: sections.entries.map((secEntry) {
+                              final sectionId = secEntry.key;
+                              final students = secEntry.value
+                                  .where((e) => e.role == 'Student')
+                                  .toList();
+
+                              final firstEntry = secEntry.value.first;
+                              return FutureBuilder<String>(
+                                future: _getSectionName(
+                                  firstEntry.schoolId,
+                                  firstEntry.programmeId,
+                                  subjectId,
+                                  sectionId,
                                 ),
+                                builder: (context, secSnap) {
+                                  final sectionName = secSnap.data ?? sectionId;
+
+
+                                  return ListTile(
+                                    title: Text(
+                                        "Section: $sectionName (Students: ${students.length})"),
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => SectionDetailsScreen(
+                                            subjectName: subjectName,
+                                            sectionName: sectionName,
+                                            mentors: mentorSections.keys
+                                                .toList(),
+                                            students: students,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
                               );
                             }).toList(),
                           ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              );
-            },
-          );
-        },
+                        );
+                      },
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    )
+    );
+  }
+}
+
+/// 🔹 Details Screen
+class SectionDetailsScreen extends StatefulWidget {
+  final String subjectName;
+  final String sectionName;
+  final List<String> mentors;
+  final List<AssignmentEntry> students;
+
+  SectionDetailsScreen({
+    required this.subjectName,
+    required this.sectionName,
+    required this.mentors,
+    required this.students,
+  });
+
+  @override
+  _SectionDetailsScreenState createState() => _SectionDetailsScreenState();
+}
+
+class _SectionDetailsScreenState extends State<SectionDetailsScreen> {
+  String searchQuery = '';
+
+  @override
+  Widget build(BuildContext context) {
+    var filtered = widget.students;
+    if (searchQuery.isNotEmpty) {
+      filtered = filtered
+          .where((s) =>
+      s.name.toLowerCase().contains(searchQuery) ||
+          s.studentIdNo.toLowerCase().contains(searchQuery))
+          .toList();
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("${widget.subjectName} - ${widget.sectionName}"), // ✅ AppBar shows both
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ✅ Subject + Section + Mentors block
+          Padding(
+            padding: EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Subject: ${widget.subjectName}",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                SizedBox(height: 4),
+                Text("Section: ${widget.sectionName}",
+                    style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+                if (widget.mentors.isNotEmpty) ...[
+                  SizedBox(height: 4),
+                  Text("Mentors: ${widget.mentors.join(', ')}"),
+                ]
+              ],
+            ),
+          ),
+
+          // 🔎 Search bar
+          Padding(
+            padding: EdgeInsets.all(8),
+            child: TextField(
+              decoration: InputDecoration(
+                labelText: "Search Student",
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (val) =>
+                  setState(() => searchQuery = val.toLowerCase()),
+            ),
+          ),
+
+          // 👩‍🎓 Student list
+          Expanded(
+            child: ListView.builder(
+              itemCount: filtered.length,
+              itemBuilder: (_, i) {
+                final s = filtered[i];
+                return ListTile(
+                  leading: Icon(Icons.person),
+                  title: Text(s.name),
+                  subtitle: Text("ID: ${s.studentIdNo}"),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

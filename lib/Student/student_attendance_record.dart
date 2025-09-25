@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class StudentAttendanceRecordsScreen extends StatefulWidget {
-  final String classId;
+  final String sectionId;
   final String subjectId;
   final String studentId;
   final Color color;
 
   const StudentAttendanceRecordsScreen({
     Key? key,
-    required this.classId,
+    required this.sectionId,
     required this.subjectId,
     required this.studentId,
     required this.color,
@@ -39,7 +39,7 @@ class _StudentAttendanceRecordsScreenState
   Future<void> _fetchAttendance() async {
     final snapshot = await FirebaseFirestore.instance
         .collection('attendance')
-        .doc(widget.classId)
+        .doc(widget.sectionId)
         .collection(widget.subjectId)
         .get();
 
