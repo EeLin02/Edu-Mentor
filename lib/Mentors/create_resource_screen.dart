@@ -6,6 +6,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:path/path.dart' as path;
+import 'package:dropdown_search/dropdown_search.dart';
+
 
 class CreateResourceScreen extends StatefulWidget {
   final String subjectId;
@@ -466,34 +468,63 @@ class _CreateResourceScreenState extends State<CreateResourceScreen> {
               ],
             ),
 
-            _buildCard(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildLabel('Categories'),
-                Wrap(
-                  spacing: 8,
-                  children: _allCategories.map((cat) {
-                    return InputChip(
-                      label: Text(cat),
-                      selected: _selectedCategory == cat,
-                      selectedColor: Colors.indigo.shade100,
-                      onSelected: (_) => setState(() => _selectedCategory = cat),
-                      deleteIcon: Icon(Icons.edit),
-                      onDeleted: () => _showCategoryOptions(cat),
-                    );
-                  }).toList(),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownSearch<String>(
+                        selectedItem: _selectedCategory,
+                        items: _allCategories,
+                        popupProps: const PopupProps.menu(
+                          showSearchBox: true, // enables search
+                          searchFieldProps: TextFieldProps(
+                            autofocus: true, //  this makes the search bar active right away
+                            decoration: InputDecoration(
+                              hintText: "Search category...",
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.all(8),
+                            ),
+                          ),
+                        ),
+                        dropdownDecoratorProps: DropDownDecoratorProps(
+                          dropdownSearchDecoration: InputDecoration(
+                            labelText: "Select a category",
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.all(Radius.circular(12)),
+                            ),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                        ),
+                        onChanged: (val) {
+                          setState(() => _selectedCategory = val);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.edit),
+                      onPressed: () {
+                        if (_selectedCategory != null) {
+                          _showCategoryOptions(_selectedCategory!);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Please select a category first.")),
+                          );
+                        }
+                      },
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: _handleAddCategory,
-                    icon: Icon(Icons.add),
-                    label: Text("Add Category"),
-                  ),
-                )
+                TextButton.icon(
+                  onPressed: _handleAddCategory,
+                  icon: const Icon(Icons.add),
+                  label: const Text("Add Category"),
+                ),
               ],
             ),
-
 
             _buildCard(
               children: [

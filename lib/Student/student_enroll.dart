@@ -161,6 +161,18 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
     }
   }
 
+  Stream<DocumentSnapshot?> _getPendingRequest(String subjectId, String? sectionId) {
+    return _firestore
+        .collection("enrollmentRequests")
+        .where("studentId", isEqualTo: widget.studentId)
+        .where("subjectId", isEqualTo: subjectId)
+        .where("currentSectionId", isEqualTo: sectionId)
+        .where("status", isEqualTo: "pending")
+        .limit(1)
+        .snapshots()
+        .map((snap) => snap.docs.isNotEmpty ? snap.docs.first : null);
+  }
+
 
   void _addSubjectDialog() async {
     String query = "";
@@ -302,79 +314,108 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
   }
 
   Widget _buildEnrolledSubject(String subjectId, String subjectName, String? sectionId) {
-    if (sectionId == null) {
+    // ❌ Prevent null/empty Firestore paths
+    if (schoolId == null || programmeId == null || subjectId.isEmpty || sectionId == null || sectionId.isEmpty) {
       return Card(
         child: ListTile(
           title: Text(subjectName),
-          subtitle: Text("No section assigned"),
+          subtitle: const Text("Invalid subject/section reference"),
         ),
       );
     }
 
-    if (schoolId == null || programmeId == null || subjectId.isEmpty) {
-      return Card(
-        child: ListTile(
-          title: Text(subjectName),
-          subtitle: Text("Invalid subject reference"),
-        ),
-      );
-    }
+    return StreamBuilder<DocumentSnapshot?>(
+      stream: _getPendingRequest(subjectId, sectionId),
+      builder: (context, requestSnap) {
+        final hasPending = requestSnap.hasData && requestSnap.data != null;
+        final pendingDoc = requestSnap.data;
 
-    return FutureBuilder<DocumentSnapshot>(
-      future: _firestore
-          .collection("schools")
-          .doc(schoolId)
-          .collection("programmes")
-          .doc(programmeId)
-          .collection("subjects")
-          .doc(subjectId)
-          .collection("sections")
-          .doc(sectionId)
-          .get(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (hasPending) {
+          final type = pendingDoc!["type"] as String;
           return Card(
             child: ListTile(
               title: Text(subjectName),
-              subtitle: Text("Loading section..."),
+              subtitle: Text("Pending ${type == "drop" ? "Drop" : "Exchange"} Request"),
+              trailing: PopupMenuButton<String>(
+                onSelected: (value) async {
+                  if (value == "cancel") {
+                    await pendingDoc.reference.delete();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Request cancelled.")),
+                    );
+                  } else if (value == "changeToExchange") {
+                    _showExchangeDialog(subjectId, sectionId, existingDoc: pendingDoc);
+                  }
+                },
+                itemBuilder: (ctx) => [
+                  const PopupMenuItem(value: "cancel", child: Text("Cancel Request")),
+                  if (type == "drop")
+                    const PopupMenuItem(value: "changeToExchange", child: Text("Change to Exchange")),
+                ],
+              ),
             ),
           );
         }
 
-        if (!snapshot.hasData || !snapshot.data!.exists) {
-          return Card(
-            child: ListTile(
-              title: Text(subjectName),
-              subtitle: Text("Section not found"),
-            ),
-          );
-        }
+        // 🟦 Default: no pending request → safe FutureBuilder
+        return FutureBuilder<DocumentSnapshot>(
+          future: _firestore
+              .collection("schools")
+              .doc(schoolId!)
+              .collection("programmes")
+              .doc(programmeId!)
+              .collection("subjects")
+              .doc(subjectId)
+              .collection("sections")
+              .doc(sectionId) // ✅ safe because of guards above
+              .get(),
+          builder: (context, sectionSnap) {
+            if (sectionSnap.connectionState == ConnectionState.waiting) {
+              return Card(
+                child: ListTile(
+                  title: Text(subjectName),
+                  subtitle: const Text("Loading section..."),
+                ),
+              );
+            }
 
-        final sectionData = snapshot.data!.data() as Map<String, dynamic>;
-        final sectionName = sectionData["name"] ?? sectionId;
+            if (!sectionSnap.hasData || !sectionSnap.data!.exists) {
+              return Card(
+                child: ListTile(
+                  title: Text(subjectName),
+                  subtitle: const Text("Section not found"),
+                ),
+              );
+            }
 
-        return Card(
-          child: ListTile(
-            title: Text(subjectName),
-            subtitle: Text("Enrolled in section: $sectionName"),
-            trailing: PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == "drop") {
-                  _sendDropRequest(subjectId, sectionId);
-                } else if (value == "exchange") {
-                  _showExchangeDialog(subjectId, sectionId);
-                }
-              },
-              itemBuilder: (ctx) => [
-                PopupMenuItem(value: "drop", child: Text("Request Drop")),
-                PopupMenuItem(value: "exchange", child: Text("Request Exchange")),
-              ],
-            ),
-          ),
+            final sectionData = sectionSnap.data!.data() as Map<String, dynamic>;
+            final sectionName = sectionData["name"] ?? sectionId;
+
+            return Card(
+              child: ListTile(
+                title: Text(subjectName),
+                subtitle: Text("Enrolled in section: $sectionName"),
+                trailing: PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == "drop") {
+                      _sendDropRequest(subjectId, sectionId);
+                    } else if (value == "exchange") {
+                      _showExchangeDialog(subjectId, sectionId);
+                    }
+                  },
+                  itemBuilder: (ctx) => [
+                    const PopupMenuItem(value: "drop", child: Text("Request Drop")),
+                    const PopupMenuItem(value: "exchange", child: Text("Request Exchange")),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
   }
+
 
 
   Future<void> _sendDropRequest(String subjectId, String? sectionId) async {
@@ -395,8 +436,11 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
   }
 
 
-  Future<void> _showExchangeDialog(String subjectId,
-      String? currentSectionId) async {
+  Future<void> _showExchangeDialog(
+      String subjectId,
+      String? currentSectionId, {
+        DocumentSnapshot? existingDoc,
+      }) async {
     String? newSectionId;
 
     await showDialog(
@@ -444,17 +488,27 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
               child: Text("Request"),
               onPressed: () async {
                 if (newSectionId != null && newSectionId != currentSectionId) {
-                  await _firestore.collection("enrollmentRequests").add({
-                    "studentId": widget.studentId,
-                    "schoolId": schoolId,
-                    "programmeId": programmeId,
-                    "subjectId": subjectId,
-                    "currentSectionId": currentSectionId,
-                    "requestedSectionId": newSectionId,
-                    "type": "exchange",
-                    "status": "pending",
-                    "createdAt": FieldValue.serverTimestamp(),
-                  });
+                  if (existingDoc != null) {
+                    // 🔄 Update existing drop → exchange
+                    await existingDoc.reference.update({
+                      "requestedSectionId": newSectionId,
+                      "type": "exchange",
+                      "updatedAt": FieldValue.serverTimestamp(),
+                    });
+                  } else {
+                    // ➕ New exchange request
+                    await _firestore.collection("enrollmentRequests").add({
+                      "studentId": widget.studentId,
+                      "schoolId": schoolId,
+                      "programmeId": programmeId,
+                      "subjectId": subjectId,
+                      "currentSectionId": currentSectionId,
+                      "requestedSectionId": newSectionId,
+                      "type": "exchange",
+                      "status": "pending",
+                      "createdAt": FieldValue.serverTimestamp(),
+                    });
+                  }
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text("Exchange request submitted!")),
@@ -467,6 +521,7 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
       },
     );
   }
+
 
 
   @override
