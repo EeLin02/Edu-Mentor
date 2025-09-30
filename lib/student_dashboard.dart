@@ -136,6 +136,7 @@ class _StudentDashboardScreenState extends State<StudentDashboard> {
 
         tempList.add({
           'subjectName': subjectDoc.data()?['name'] ?? 'Unknown Subject',
+          'subjectCode': subjectDoc.data()?['code'] ?? '',
           'sectionName': sectionDoc.data()?['name'] ?? 'Unknown Section',
           'subjectId': subjectId,
           'sectionId': sectionId,
@@ -147,15 +148,18 @@ class _StudentDashboardScreenState extends State<StudentDashboard> {
       }
 
       setState(() {
-        if (favIds.isEmpty) {
-          // ⭐ shows all if no star
-          enrolledSections = tempList;
-        } else {
-          // ⭐ just shows up star
-          enrolledSections = tempList.where((e) => e['isFavorite']).toList();
-        }
+        // Always show all enrolled sections
+        enrolledSections = tempList.map((e) {
+          final favKey = "${e['subjectId']}_${e['sectionId']}";
+          return {
+            ...e,
+            'isFavorite': favIds.contains(favKey), // mark favorite only
+          };
+        }).toList();
+
         isLoading = false;
       });
+
 
     } catch (e, st) {
       print("❌ Error loading enrolled sections: $e");
@@ -179,7 +183,15 @@ class _StudentDashboardScreenState extends State<StudentDashboard> {
         "sectionId": sectionId,
         "color": color.value,
       });
-      await _fetchEnrolledSections(studentId);
+
+      // Update local data directly
+      setState(() {
+        final index = enrolledSections.indexWhere((e) => e['sectionId'] == sectionId);
+        if (index != -1) {
+          enrolledSections[index]['color'] = color;
+        }
+      });
+
     } catch (e) {
       print("Error saving student color: $e");
     }
@@ -368,127 +380,238 @@ class _StudentDashboardScreenState extends State<StudentDashboard> {
   }
 
   Widget _buildDashboardBody() {
-    return enrolledSections.isEmpty
-        ? const Center(child: Text("No enrolled sections found."))
-        : Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                "Courses",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue,
-                ),
-              ),
-              TextButton(
-                onPressed: () async {
-                  final updated = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AllCoursesScreen(
-                        studentId: studentId,
-                        enrolledSections: enrolledSections,
+    if (studentId.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore
+          .collection("subjectEnrollments")
+          .where("studentId", isEqualTo: studentId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text("No enrolled sections found."));
+        }
+
+        // 🔹 Step 1: wrap extra fetches into Future.wait
+        final fetchData = Future.wait(snapshot.data!.docs.map((doc) async {
+          final data = doc.data() as Map<String, dynamic>;
+          final subjectId = data['subjectId'];
+          final sectionId = data['sectionId'];
+          final schoolId = data['schoolId'];
+          final programmeId = data['programmeId'];
+
+          // fetch subject
+          final subjectDoc = await _firestore
+              .collection("schools")
+              .doc(schoolId)
+              .collection("programmes")
+              .doc(programmeId)
+              .collection("subjects")
+              .doc(subjectId)
+              .get();
+
+          // fetch section
+          final sectionDoc = await _firestore
+              .collection("schools")
+              .doc(schoolId)
+              .collection("programmes")
+              .doc(programmeId)
+              .collection("subjects")
+              .doc(subjectId)
+              .collection("sections")
+              .doc(sectionId)
+              .get();
+
+          // 🔹 fetch customization
+          final customizationDoc = await _firestore
+              .collection('studentCustomizations')
+              .doc('${studentId}_$sectionId')
+              .get();
+          Color cardColor = Colors.blue;
+          if (customizationDoc.exists) {
+            final colorData = customizationDoc.data()?['color'];
+            cardColor = _parseColor(colorData);
+          }
+
+          return {
+            "subjectId": subjectId,
+            "subjectName": subjectDoc.data()?["name"] ?? "Unknown Subject",
+            "subjectCode": subjectDoc.data()?["code"] ?? "",
+            "sectionId": sectionId,
+            "sectionName": sectionDoc.data()?["name"] ?? "Unknown Section",
+            "schoolId": schoolId,
+            "programmeId": programmeId,
+            "color": cardColor,
+          };
+        }).toList());
+
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: fetchData,
+          builder: (context, enrolledSnapshot) {
+            if (!enrolledSnapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final sections = enrolledSnapshot.data!;
+
+            // 🔹 Step 2: Load favorites in parallel
+            return FutureBuilder<DocumentSnapshot>(
+              future: _firestore
+                  .collection("studentFavorites")
+                  .doc(studentId)
+                  .get(),
+              builder: (context, favSnap) {
+                if (!favSnap.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final favData = favSnap.data?.data() as Map<String, dynamic>?;
+                final favIds = Set<String>.from(favData?['favorites'] ?? []);
+
+
+                // Merge favorites into sections
+                final mergedSections = sections.map((e) {
+                  final favKey = "${e['subjectId']}_${e['sectionId']}";
+                  return {
+                    ...e,
+                    "isFavorite": favIds.contains(favKey),
+                  };
+                }).toList();
+
+                final starred =
+                mergedSections.where((e) => e['isFavorite'] == true).toList();
+                final displayList =
+                starred.isNotEmpty ? starred : mergedSections;
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            "Courses",
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue,
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              final updated = await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => AllCoursesScreen(
+                                    studentId: studentId,
+                                    enrolledSections: mergedSections,
+                                  ),
+                                ),
+                              );
+                              if (updated == true) {
+                                setState(() {}); // refresh
+                              }
+                            },
+                            child: const Text(
+                              "All Courses",
+                              style: TextStyle(
+                                color: Colors.blue,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  );
-                  // ✅ If AllCoursesScreen popped with true, reload dashboard data
-                  if (updated == true) {
-                    _fetchEnrolledSections(studentId);
-                  }
-                },
-                child: const Text(
-                  "All Courses",
-                  style: TextStyle(
-                    color: Colors.blue,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: ListView.builder(
-              itemCount: enrolledSections.length,
-              itemBuilder: (context, index) {
-                final item = enrolledSections[index];
-                final cardColor = item['color'] ?? Colors.blue;
+                      const SizedBox(height: 10),
 
-                final textColor = cardColor.computeLuminance() > 0.5
-                    ? Colors.black87
-                    : Colors.white;
-                final subtitleColor = cardColor.computeLuminance() > 0.5
-                    ? Colors.black54
-                    : Colors.white70;
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: displayList.length,
+                          itemBuilder: (context, index) {
+                            final item = displayList[index];
+                            final cardColor = item['color'] as Color;
+                            final textColor =
+                            cardColor.computeLuminance() > 0.5
+                                ? Colors.black87
+                                : Colors.white;
+                            final subtitleColor =
+                            cardColor.computeLuminance() > 0.5
+                                ? Colors.black54
+                                : Colors.white70;
 
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                  margin: const EdgeInsets.symmetric(vertical: 6),
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: cardColor.withOpacity(0.4),
-                        blurRadius: 6,
-                        offset: const Offset(0, 4),
+                            return AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              margin: const EdgeInsets.symmetric(vertical: 6),
+                              decoration: BoxDecoration(
+                                color: cardColor,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: cardColor.withOpacity(0.4),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                                title: Text(
+                                  item['subjectName'],
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                    color: textColor,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  "${item['subjectCode']} . ${item['sectionName']}",
+                                  style: TextStyle(
+                                    color: subtitleColor,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.color_lens, color: Colors.white),
+                                  onPressed: () => _showColorPicker(item['sectionId']),
+                                ),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => StudentSubjectSectionsDetailsScreen(
+                                        subjectId: item['subjectId'],
+                                        sectionId: item['sectionId'],
+                                        schoolId: item['schoolId'],
+                                        programmeId: item['programmeId'],
+                                        studentId: studentId,
+                                        color: cardColor,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     ],
                   ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    title: Text(
-                      item['subjectName'],
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: textColor,
-                      ),
-                    ),
-                    subtitle: Text(
-                      item['sectionName'],
-                      style: TextStyle(
-                        color: subtitleColor,
-                        fontSize: 14,
-                      ),
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.color_lens, color: Colors.white),
-                      onPressed: () =>
-                          _showColorPicker(item['sectionId']),
-                    ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => StudentSubjectSectionsDetailsScreen(
-                            subjectId: item['subjectId'],
-                            sectionId: item['sectionId'],
-                            schoolId: item['schoolId'],
-                            programmeId: item['programmeId'],
-                            studentId: studentId,
-                            color: cardColor,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
                 );
               },
-            ),
-          ),
-        ],
-      ),
+            );
+          },
+        );
+      },
     );
   }
+
 }
 
 class AllCoursesScreen extends StatefulWidget {
@@ -508,13 +631,15 @@ class AllCoursesScreen extends StatefulWidget {
 class _AllCoursesScreenState extends State<AllCoursesScreen> {
   String searchQuery = '';
   Set<String> favoriteSectionIds = {};
-  bool favoritesChanged = false; //  track changes
-
+  bool favoritesChanged = false;
+  List<Map<String, dynamic>> allCourses = [];
+  bool loading = true;
 
   @override
   void initState() {
     super.initState();
     _loadFavorites();
+    _loadAllCourses();
   }
 
   Future<void> _loadFavorites() async {
@@ -524,11 +649,78 @@ class _AllCoursesScreenState extends State<AllCoursesScreen> {
         .get();
 
     if (snap.exists) {
-      final data = snap.data();
+      final data = snap.data() as Map<String, dynamic>?;
       setState(() {
-        favoriteSectionIds =
-        Set<String>.from(data?['favorites'] ?? []);
+        favoriteSectionIds = Set<String>.from(data?['favorites'] ?? []);
       });
+    }
+  }
+
+  Future<void> _loadAllCourses() async {
+    try {
+      final enrollmentSnap = await FirebaseFirestore.instance
+          .collection('subjectEnrollments')
+          .where('studentId', isEqualTo: widget.studentId)
+          .get();
+
+      List<Map<String, dynamic>> tempList = [];
+
+      for (var doc in enrollmentSnap.docs) {
+        final data = doc.data();
+
+        final schoolId = data['schoolId'];
+        final programmeId = data['programmeId'];
+        final subjectId = data['subjectId'];
+        final sectionId = data['sectionId'];
+
+        if ([schoolId, programmeId, subjectId, sectionId].contains(null)) {
+          continue;
+        }
+
+        // get subject
+        final subjectDoc = await FirebaseFirestore.instance
+            .collection("schools")
+            .doc(schoolId)
+            .collection("programmes")
+            .doc(programmeId)
+            .collection("subjects")
+            .doc(subjectId)
+            .get();
+
+        if (!subjectDoc.exists) continue;
+
+        // get section
+        final sectionDoc = await FirebaseFirestore.instance
+            .collection("schools")
+            .doc(schoolId)
+            .collection("programmes")
+            .doc(programmeId)
+            .collection("subjects")
+            .doc(subjectId)
+            .collection("sections")
+            .doc(sectionId)
+            .get();
+
+        if (!sectionDoc.exists) continue;
+
+        tempList.add({
+          'subjectId': subjectId,
+          'sectionId': sectionId,
+          'schoolId': schoolId,
+          'programmeId': programmeId,
+          'subjectName': subjectDoc.data()?['name'] ?? 'Unknown Subject',
+          'subjectCode': subjectDoc.data()?['code'] ?? '',
+          'sectionName': sectionDoc.data()?['name'] ?? 'Unknown Section',
+        });
+      }
+
+      setState(() {
+        allCourses = tempList;
+        loading = false;
+      });
+    } catch (e) {
+      print("❌ Error loading all courses: $e");
+      setState(() => loading = false);
     }
   }
 
@@ -554,10 +746,17 @@ class _AllCoursesScreenState extends State<AllCoursesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Always show all courses in AllCoursesScreen
+    final filtered = allCourses.where((e) {
+      final name = (e['subjectName'] ?? '').toString().toLowerCase();
+      return name.contains(searchQuery.toLowerCase());
+    }).toList();
+
+
     return WillPopScope(
       onWillPop: () async {
-        Navigator.pop(context, favoritesChanged); // ✅ Pass the result on return
-        return false; // Prevent default pop to avoid triggering twice
+        Navigator.pop(context, favoritesChanged);
+        return false;
       },
       child: Scaffold(
         appBar: AppBar(
@@ -565,12 +764,13 @@ class _AllCoursesScreenState extends State<AllCoursesScreen> {
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () {
-              Navigator.pop(context, favoritesChanged); // ✅ Pass result when back button is clicked
-
+              Navigator.pop(context, favoritesChanged);
             },
           ),
         ),
-        body: Column(
+        body: loading
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
           children: [
             Padding(
               padding: const EdgeInsets.all(12.0),
@@ -586,52 +786,42 @@ class _AllCoursesScreenState extends State<AllCoursesScreen> {
               ),
             ),
             Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('subjectEnrollments')
-                    .where('studentId', isEqualTo: widget.studentId)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return const Center(child: Text("No courses enrolled yet."));
-                  }
+              child: filtered.isEmpty
+                  ? const Center(child: Text("No courses found."))
+                  : ListView.builder(
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  final item = filtered[index];
+                  final favKey =
+                      "${item['subjectId']}_${item['sectionId']}";
+                  final isFav =
+                  favoriteSectionIds.contains(favKey);
 
-                  final enrollments = snapshot.data!.docs
-                      .map((doc) => doc.data() as Map<String, dynamic>)
-                      .toList();
-
-                  final filtered = enrollments.where((e) {
-                    final name = (e['subjectName'] ?? '').toString().toLowerCase();
-                    return name.contains(searchQuery.toLowerCase());
-                  }).toList();
-
-                  return ListView.builder(
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) {
-                      final item = filtered[index];
-                      final favKey = "${item['subjectId']}_${item['sectionId']}";
-                      final isFav = favoriteSectionIds.contains(favKey);
-
-                      return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        child: ListTile(
-                          title: Text(item['subjectName'] ?? 'Unknown Subject'),
-                          subtitle: Text(item['sectionName'] ?? 'Unknown Section'),
-                          trailing: IconButton(
-                            icon: Icon(
-                              isFav ? Icons.star : Icons.star_border,
-                              color: isFav ? Colors.yellow[700] : Colors.grey,
-                            ),
-                            onPressed: () => _toggleFavorite(item['subjectId'], item['sectionId']),
-                          ),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => StudentSubjectSectionsDetailsScreen(
+                  return Card(
+                    margin: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    child: ListTile(
+                      title: Text(item['subjectName']),
+                      subtitle: Text(
+                      "${item['subjectCode']} . ${item['sectionName']}",),
+                      trailing: IconButton(
+                        icon: Icon(
+                          isFav
+                              ? Icons.star
+                              : Icons.star_border,
+                          color: isFav
+                              ? Colors.yellow[700]
+                              : Colors.grey,
+                        ),
+                        onPressed: () => _toggleFavorite(
+                            item['subjectId'], item['sectionId']),
+                      ),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                StudentSubjectSectionsDetailsScreen(
                                   subjectId: item['subjectId'],
                                   sectionId: item['sectionId'],
                                   schoolId: item['schoolId'],
@@ -639,12 +829,10 @@ class _AllCoursesScreenState extends State<AllCoursesScreen> {
                                   studentId: widget.studentId,
                                   color: Colors.blue,
                                 ),
-                              ),
-                            );
-                          },
-                        ),
-                      );
-                    },
+                          ),
+                        );
+                      },
+                    ),
                   );
                 },
               ),
@@ -655,4 +843,5 @@ class _AllCoursesScreenState extends State<AllCoursesScreen> {
     );
   }
 }
+
 

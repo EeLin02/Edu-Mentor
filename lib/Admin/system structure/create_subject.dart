@@ -8,10 +8,12 @@ class ManageSubjectsScreen extends StatefulWidget {
 
 class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
   final TextEditingController subjectController = TextEditingController();
+  final TextEditingController codeController = TextEditingController();
   final TextEditingController searchController = TextEditingController();
 
   String? selectedSchool;
   String? selectedProgramme;
+
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -20,6 +22,13 @@ class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
     return data != null && data.containsKey('name')
         ? data['name'] as String
         : 'Unnamed';
+  }
+
+  String _getFieldCode(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>?;
+    return data != null && data.containsKey('code')
+        ? data['code'] as String
+        : 'NoCode';
   }
 
   /// ------------------------------
@@ -184,20 +193,35 @@ class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
   /// ------------------------------
   /// Edit Subject Dialog
   /// ------------------------------
-  void _showEditDialog(String subjectId, String currentName) {
-    final TextEditingController editController =
+  void _showEditDialog(String subjectId, String currentName, String currentCode) {
+    final TextEditingController editNameController =
     TextEditingController(text: currentName);
+    final TextEditingController editCodeController =
+    TextEditingController(text: currentCode);
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text("Edit Subject"),
-        content: TextField(
-          controller: editController,
-          decoration: InputDecoration(
-            labelText: "Subject Name",
-            border: OutlineInputBorder(),
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: editCodeController,
+              decoration: InputDecoration(
+                labelText: "Subject Code",
+                border: OutlineInputBorder(),
+              ),
+            ),
+            SizedBox(height: 10),
+            TextField(
+              controller: editNameController,
+              decoration: InputDecoration(
+                labelText: "Subject Name",
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -206,8 +230,10 @@ class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              final newName = editController.text.trim();
+              final newName = editNameController.text.trim();
+              final newCode = editCodeController.text.trim();
               if (newName.isNotEmpty &&
+                  newCode.isNotEmpty &&
                   selectedSchool != null &&
                   selectedProgramme != null) {
                 await _firestore
@@ -217,7 +243,10 @@ class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
                     .doc(selectedProgramme)
                     .collection('subjects')
                     .doc(subjectId)
-                    .update({'name': newName});
+                    .update({
+                  'name': newName,
+                  'code': newCode,
+                });
                 Navigator.pop(context);
               }
             },
@@ -231,6 +260,7 @@ class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
   @override
   void dispose() {
     subjectController.dispose();
+    codeController.dispose();
     searchController.dispose();
     super.dispose();
   }
@@ -340,7 +370,17 @@ class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
                 },
               ),
 
-            /// --- Subject Input ---
+            /// --- Subject Code Input ---
+            TextField(
+              controller: codeController,
+              decoration: InputDecoration(
+                labelText: "Subject Code (e.g. AUG6001 CEM)",
+                border: OutlineInputBorder(),
+              ),
+            ),
+            SizedBox(height: 12),
+
+            /// --- Subject Name Input ---
             TextField(
               controller: subjectController,
               decoration: InputDecoration(
@@ -353,7 +393,10 @@ class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
             ElevatedButton(
               onPressed: () async {
                 final name = subjectController.text.trim();
+                final code = codeController.text.trim();
+
                 if (name.isNotEmpty &&
+                    code.isNotEmpty &&
                     selectedSchool != null &&
                     selectedProgramme != null) {
                   final newSubjectRef = await _firestore
@@ -362,10 +405,14 @@ class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
                       .collection('programmes')
                       .doc(selectedProgramme)
                       .collection('subjects')
-                      .add({'name': name});
+                      .add({
+                    'name': name,
+                    'code': code,
+                  });
 
                   await newSubjectRef.update({'subjectId': newSubjectRef.id});
                   subjectController.clear();
+                  codeController.clear();
                 }
               },
               child: Text("Add Subject"),
@@ -394,7 +441,7 @@ class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
                       .collection('programmes')
                       .doc(selectedProgramme)
                       .collection('subjects')
-                      .orderBy('name')
+                      .orderBy('code')
                       .snapshots(),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) {
@@ -402,8 +449,9 @@ class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
                     }
                     final subjects = snapshot.data!.docs.where((doc) {
                       final name = _getFieldName(doc).toLowerCase();
+                      final code = _getFieldCode(doc).toLowerCase();
                       final query = searchController.text.toLowerCase();
-                      return name.contains(query);
+                      return name.contains(query) || code.contains(query);
                     }).toList();
 
                     if (subjects.isEmpty) {
@@ -415,16 +463,17 @@ class _ManageSubjectsScreenState extends State<ManageSubjectsScreen> {
                       itemBuilder: (context, index) {
                         final subject = subjects[index];
                         final name = _getFieldName(subject);
+                        final code = _getFieldCode(subject);
 
                         return ListTile(
-                          title: Text(name),
+                          title: Text("$code - $name"),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
                                 icon: Icon(Icons.edit, color: Colors.blue),
                                 onPressed: () =>
-                                    _showEditDialog(subject.id, name),
+                                    _showEditDialog(subject.id, name, code),
                               ),
                               IconButton(
                                 icon: Icon(Icons.delete, color: Colors.red),

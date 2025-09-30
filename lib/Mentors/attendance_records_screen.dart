@@ -10,9 +10,13 @@ class AttendanceRecordsScreen extends StatefulWidget {
   final String subjectName;
   final String sectionName;
   final Color color;
+  final String schoolId;
+  final String programmeId;
 
   const AttendanceRecordsScreen({
     super.key,
+    required this.schoolId,
+    required this.programmeId,
     required this.sectionId,
     required this.subjectId,
     required this.mentorId,
@@ -236,6 +240,8 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                             context,
                             MaterialPageRoute(
                               builder: (_) => TakeAttendanceScreen(
+                                schoolId: widget.schoolId,
+                                programmeId: widget.programmeId,
                                 sectionId: widget.sectionId,
                                 subjectId: widget.subjectId,
                                 mentorId: widget.mentorId,

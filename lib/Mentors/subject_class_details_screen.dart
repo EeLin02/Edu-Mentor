@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 class SubjectSectionDetailsScreen extends StatelessWidget {
+  final String schoolId;
+  final String programmeId;
   final String subjectName;
   final String sectionName;
   final Color color;
@@ -10,6 +12,8 @@ class SubjectSectionDetailsScreen extends StatelessWidget {
 
   const SubjectSectionDetailsScreen({
     Key? key,
+    required this.schoolId,
+    required this.programmeId,
     required this.subjectName,
     required this.sectionName,
     required this.color,
@@ -110,6 +114,8 @@ class SubjectSectionDetailsScreen extends StatelessWidget {
               textColor: textColor,
               onTap: () {
                 Navigator.pushNamed(context, '/takeAttendance', arguments: {
+                  'schoolId': schoolId,
+                  'programmeId': programmeId,
                   'subjectId': subjectId,
                   'sectionId': sectionId,
                   'mentorId': mentorId,

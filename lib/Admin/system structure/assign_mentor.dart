@@ -450,14 +450,18 @@ class _AssignMentorScreenState extends State<AssignMentorScreen> {
                   if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
                   final subjects = snapshot.data!.docs.where((doc) {
                     final name = (doc['name'] ?? '').toString().toLowerCase();
-                    return name.contains(searchQuery);
+                    final code = (doc['code'] ?? '').toString().toLowerCase();
+                    return name.contains(searchQuery) || code.contains(searchQuery);
                   }).toList();
+
                   if (subjects.isEmpty) return Center(child: Text("No subjects found."));
 
                   return ListView(
                     children: subjects.map((doc) {
                       final subjectId = doc.id;
                       final subjectName = doc['name'] ?? '';
+                      final subjectCode = doc['code'] ?? '';
+
 
                       final currLimits = sectionLimitsBySubject[subjectId] ?? {};
                       final currSelected = selectedSectionsBySubject[subjectId] ?? {};
@@ -474,8 +478,25 @@ class _AssignMentorScreenState extends State<AssignMentorScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(subjectName,
-                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      subjectName,
+                                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                  if (subjectCode.isNotEmpty)
+                                    Text(
+                                      "($subjectCode)",   // e.g. Marketing (6001CEM)
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.grey[700],
+                                      ),
+                                    ),
+                                ],
+                              ),
                               SizedBox(height: 8),
                               // mentors dropdown
                               StreamBuilder<QuerySnapshot>(

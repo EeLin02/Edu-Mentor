@@ -12,6 +12,28 @@ class StudentEnrollScreen extends StatefulWidget {
 class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  String _formatTime(String? time) {
+    if (time == null || time.isEmpty) return "";
+    try {
+      final parts = time.split(":");
+      int hour = int.parse(parts[0]);
+      int minute = int.parse(parts[1]);
+
+      final isPM = hour >= 12;
+      final displayHour = hour == 0
+          ? 12
+          : (hour > 12 ? hour - 12 : hour);
+      final displayMinute = minute.toString().padLeft(2, '0');
+      final ampm = isPM ? "pm" : "am";
+
+      return "$displayHour.${displayMinute}$ampm";
+    } catch (e) {
+      return time; // fallback if parsing fails
+    }
+  }
+
+
+
   bool isLoading = true;
   String? schoolId;
   String? programmeId;
@@ -52,6 +74,7 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
     subjects = snap.docs.map((d) => {
       "id": d.id,
       "name": d.data()?["name"] as String? ?? "Unknown",
+      "code": d.data()?["code"] as String? ?? "",
     } as Map<String, dynamic>).toList();  // cast here
   }
 
@@ -197,10 +220,14 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
             final filtered = subjects
-                .where((s) =>
-            !excludedIds.contains(s["id"]) &&
-                s["name"].toLowerCase().contains(query.toLowerCase()))
+                .where((s) {
+              final name = (s["name"] ?? "").toString().toLowerCase();
+              final code = (s["code"] ?? "").toString().toLowerCase();
+              return !excludedIds.contains(s["id"]) &&
+                  (name.contains(query.toLowerCase()) || code.contains(query.toLowerCase()));
+            })
                 .toList();
+
 
             return AlertDialog(
               title: Text("Select Subject"),
@@ -228,7 +255,7 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
                         itemBuilder: (_, i) {
                           final subj = filtered[i];
                           return ListTile(
-                            title: Text(subj["name"]),
+                            title: Text("${subj["name"]} (${subj["code"]})"),
                             onTap: () {
                               selectedSubject = subj;
                               Navigator.pop(ctx);
@@ -256,6 +283,9 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
 
 
   Widget _buildSectionSelector(String subjectId, String subjectName) {
+    final subj = subjects.firstWhere((s) => s["id"] == subjectId,
+        orElse: () => {"id": subjectId, "name": "Unknown", "code": ""});
+    final subjDisplay = "${subj["name"]} (${subj["code"]})";
     if (schoolId == null || programmeId == null || subjectId.isEmpty) {
       return SizedBox.shrink();
     }
@@ -281,9 +311,25 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(subjectName,
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 18)),
+                //  Add subject title + cancel button
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      subjDisplay,
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.cancel, color: Colors.red),
+                      onPressed: () {
+                        setState(() {
+                          selectedSections.remove(subjectId);
+                        });
+                      },
+                    ),
+                  ],
+                ),
                 ...sections.map((s) {
                   final data = s.data() as Map<String, dynamic>;
                   final secId = s.id;
@@ -313,51 +359,37 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
     );
   }
 
-  Widget _buildEnrolledSubject(String subjectId, String subjectName, String? sectionId) {
-    // ❌ Prevent null/empty Firestore paths
+  Widget _buildEnrolledSubject(String subjectId, String? sectionId) {
     if (schoolId == null || programmeId == null || subjectId.isEmpty || sectionId == null || sectionId.isEmpty) {
       return Card(
         child: ListTile(
-          title: Text(subjectName),
+          title: Text("Unknown subject"),
           subtitle: const Text("Invalid subject/section reference"),
         ),
       );
     }
 
-    return StreamBuilder<DocumentSnapshot?>(
-      stream: _getPendingRequest(subjectId, sectionId),
-      builder: (context, requestSnap) {
-        final hasPending = requestSnap.hasData && requestSnap.data != null;
-        final pendingDoc = requestSnap.data;
-
-        if (hasPending) {
-          final type = pendingDoc!["type"] as String;
-          return Card(
-            child: ListTile(
-              title: Text(subjectName),
-              subtitle: Text("Pending ${type == "drop" ? "Drop" : "Exchange"} Request"),
-              trailing: PopupMenuButton<String>(
-                onSelected: (value) async {
-                  if (value == "cancel") {
-                    await pendingDoc.reference.delete();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Request cancelled.")),
-                    );
-                  } else if (value == "changeToExchange") {
-                    _showExchangeDialog(subjectId, sectionId, existingDoc: pendingDoc);
-                  }
-                },
-                itemBuilder: (ctx) => [
-                  const PopupMenuItem(value: "cancel", child: Text("Cancel Request")),
-                  if (type == "drop")
-                    const PopupMenuItem(value: "changeToExchange", child: Text("Change to Exchange")),
-                ],
-              ),
-            ),
-          );
+    return FutureBuilder<DocumentSnapshot>(
+      future: _firestore
+          .collection("schools")
+          .doc(schoolId!)
+          .collection("programmes")
+          .doc(programmeId!)
+          .collection("subjects")
+          .doc(subjectId)
+          .get(),
+      builder: (context, subjSnap) {
+        if (subjSnap.connectionState == ConnectionState.waiting) {
+          return Card(child: ListTile(title: Text("Loading subject...")));
+        }
+        if (!subjSnap.hasData || !subjSnap.data!.exists) {
+          return Card(child: ListTile(title: Text("Unknown Subject ($subjectId)")));
         }
 
-        // 🟦 Default: no pending request → safe FutureBuilder
+        final subjData = subjSnap.data!.data() as Map<String, dynamic>?;
+        final subjectName = subjData?["name"] ?? "Unnamed Subject";
+        final subjectCode = subjData?["code"] ?? "";
+
         return FutureBuilder<DocumentSnapshot>(
           future: _firestore
               .collection("schools")
@@ -367,55 +399,100 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
               .collection("subjects")
               .doc(subjectId)
               .collection("sections")
-              .doc(sectionId) // ✅ safe because of guards above
+              .doc(sectionId)
               .get(),
-          builder: (context, sectionSnap) {
-            if (sectionSnap.connectionState == ConnectionState.waiting) {
+          builder: (context, secSnap) {
+            if (secSnap.connectionState == ConnectionState.waiting) {
               return Card(
                 child: ListTile(
-                  title: Text(subjectName),
+                  title: Text("$subjectName ($subjectCode)"),
                   subtitle: const Text("Loading section..."),
                 ),
               );
             }
-
-            if (!sectionSnap.hasData || !sectionSnap.data!.exists) {
+            if (!secSnap.hasData || !secSnap.data!.exists) {
               return Card(
                 child: ListTile(
-                  title: Text(subjectName),
-                  subtitle: const Text("Section not found"),
+                  title: Text("$subjectName ($subjectCode)"),
+                  subtitle: Text("Unknown Section ($sectionId)"),
                 ),
               );
             }
 
-            final sectionData = sectionSnap.data!.data() as Map<String, dynamic>;
-            final sectionName = sectionData["name"] ?? sectionId;
+            final secData = secSnap.data!.data() as Map<String, dynamic>?;
+            final sectionName = secData?["name"] ?? sectionId;
 
-            return Card(
-              child: ListTile(
-                title: Text(subjectName),
-                subtitle: Text("Enrolled in section: $sectionName"),
-                trailing: PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value == "drop") {
-                      _sendDropRequest(subjectId, sectionId);
-                    } else if (value == "exchange") {
-                      _showExchangeDialog(subjectId, sectionId);
-                    }
-                  },
-                  itemBuilder: (ctx) => [
-                    const PopupMenuItem(value: "drop", child: Text("Request Drop")),
-                    const PopupMenuItem(value: "exchange", child: Text("Request Exchange")),
-                  ],
-                ),
-              ),
+
+            return StreamBuilder<DocumentSnapshot?>(
+              stream: _getPendingRequest(subjectId, sectionId),
+              builder: (context, reqSnap) {
+                final pendingDoc = reqSnap.data;
+                final hasPending = pendingDoc != null;
+                final pendingType = hasPending ? pendingDoc['type'] as String? : null;
+
+                final statusText = hasPending ? "\n⏳ Pending request..." : "";
+
+                return Card(
+                  child: ListTile(
+                    title: Text("$subjectName ($subjectCode)"),
+                    subtitle: Text("Section: $sectionName$statusText"),
+                    trailing: PopupMenuButton<String>(
+                      onSelected: (value) async {
+                        if (value == "drop") {
+                          if (pendingDoc != null) {
+                            // 🔄 Update existing request to "drop"
+                            await pendingDoc.reference.update({
+                              "requestedSectionId": null,
+                              "type": "drop",
+                              "updatedAt": FieldValue.serverTimestamp(),
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("🔄 Changed to drop request")),
+                            );
+                          } else {
+                            await _sendDropRequest(subjectId, sectionId);
+                          }
+                        } else if (value == "exchange") {
+                          await _showExchangeDialog(subjectId, sectionId, existingDoc: pendingDoc);
+                        } else if (value == "cancel") {
+                          await pendingDoc?.reference.delete();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("❌ Request cancelled")),
+                          );
+                        }
+                      },
+                      itemBuilder: (ctx) {
+                        if (!hasPending) {
+                          return const [
+                            PopupMenuItem(value: "drop", child: Text("Request Drop")),
+                            PopupMenuItem(value: "exchange", child: Text("Request Exchange")),
+                          ];
+                        } else if (pendingType == "drop") {
+                          return const [
+                            PopupMenuItem(value: "cancel", child: Text("Cancel Request")),
+                            PopupMenuItem(value: "exchange", child: Text("Request Exchange")),
+                          ];
+                        } else if (pendingType == "exchange") {
+                          return const [
+                            PopupMenuItem(value: "cancel", child: Text("Cancel Request")),
+                            PopupMenuItem(value: "drop", child: Text("Request Drop")),
+                          ];
+                        } else {
+                          return const [
+                            PopupMenuItem(value: "cancel", child: Text("Cancel Request")),
+                          ];
+                        }
+                      },
+                    ),
+                  ),
+                );
+              },
             );
           },
         );
       },
     );
   }
-
 
 
   Future<void> _sendDropRequest(String subjectId, String? sectionId) async {
@@ -465,12 +542,18 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: sections.map((s) {
                   final secId = s.id;
-                  final name = s["name"];
+                  final name = s["name"] ?? "";
+                  final limit = s["limit"] ?? 0;
+                  final currentCount = s["currentCount"] ?? 0;
+                  final isFull = (limit == 0) || (currentCount >= limit);
+
                   return RadioListTile<String>(
                     value: secId,
                     groupValue: newSectionId,
-                    title: Text(name),
-                    onChanged: (val) {
+                    title: Text("$name ($currentCount/$limit)"),
+                    onChanged: isFull
+                        ? null // disable if full
+                        : (val) {
                       newSectionId = val;
                       (ctx as Element).markNeedsBuild();
                     },
@@ -489,14 +572,14 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
               onPressed: () async {
                 if (newSectionId != null && newSectionId != currentSectionId) {
                   if (existingDoc != null) {
-                    // 🔄 Update existing drop → exchange
+                    // 🔄 Update existing request
                     await existingDoc.reference.update({
                       "requestedSectionId": newSectionId,
                       "type": "exchange",
                       "updatedAt": FieldValue.serverTimestamp(),
                     });
                   } else {
-                    // ➕ New exchange request
+                    // ➕ New request
                     await _firestore.collection("enrollmentRequests").add({
                       "studentId": widget.studentId,
                       "schoolId": schoolId,
@@ -521,6 +604,7 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
       },
     );
   }
+
 
 
 
@@ -596,8 +680,8 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
                     orElse: () => {"id": subjectId, "name": "Unknown"},
                   );
 
-                  return _buildEnrolledSubject(
-                      subjectId, subj["name"], sectionId);
+                  return _buildEnrolledSubject(subjectId, sectionId);
+
                 }).toList(),
               );
             },

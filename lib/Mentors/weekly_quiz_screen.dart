@@ -1121,10 +1121,10 @@ class _QuizSubmissionsScreenState extends State<QuizSubmissionsScreen> {
                     final sub = filtered[i];
                     return ListTile(
                       leading: CircleAvatar(
-                        backgroundImage: sub["studentProfileUrl"] != null
-                            ? NetworkImage(sub["studentProfileUrl"])
+                        backgroundImage: sub["profileUrl"] != null
+                            ? NetworkImage(sub["profileUrl"])
                             : null,
-                        child: sub["studentProfileUrl"] == null
+                        child: sub["profileUrl"] == null
                             ? const Icon(Icons.person)
                             : null,
                       ),

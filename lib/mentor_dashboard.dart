@@ -73,6 +73,7 @@ class _MentorDashboardState extends State<MentorDashboard> {
 
 
   Future<void> _fetchProgrammesAndSections(String mentorId) async {
+    favoriteIds = {};
     try {
       // --- Step 1: Load favorites ---
       final favSnap = await FirebaseFirestore.instance
@@ -80,10 +81,10 @@ class _MentorDashboardState extends State<MentorDashboard> {
           .doc(mentorId)
           .get();
 
-      if (favSnap.exists) {
-        favoriteIds = Set<String>.from(favSnap.data()?["favorites"] ?? []);
+      if (favSnap.exists && favSnap.data()?["favorites"] != null) {
+        favoriteIds = Set<String>.from(favSnap.data()?["favorites"]);
       } else {
-        favoriteIds = {};
+        favoriteIds = {}; // ✅ 确保为空时不是 null
       }
 
       // --- Step 2: Load subjectMentors ---
@@ -154,6 +155,7 @@ class _MentorDashboardState extends State<MentorDashboard> {
             .get();
         if (!subjectSnap.exists) continue;
         final subjectName = subjectSnap.data()?["name"] ?? "Unnamed Subject";
+        final subjectCode = subjectSnap.data()?["code"] ?? "";
 
         // --- Fetch section ---
         final sectionSnap = await FirebaseFirestore.instance
@@ -171,7 +173,6 @@ class _MentorDashboardState extends State<MentorDashboard> {
 
         // --- Apply customization ---
         final customization = customizations[sectionId];
-        final nickname = customization?['nickname'] ?? '';
         final storedColor = customization?['color'];
 
         Color cardColor = Colors.teal.shade400;
@@ -192,14 +193,18 @@ class _MentorDashboardState extends State<MentorDashboard> {
           'subjectId': subjectId,
           'sectionId': sectionId,
           'subjectName': subjectName,
+          'subjectCode': subjectCode,
           'sectionName': sectionName,
-          'nickname': nickname,
           'color': cardColor,
+          'schoolId': schoolId,
         };
 
         tempProgrammesData.putIfAbsent(programmeName, () => []);
         tempProgrammesData[programmeName]!.add(item);
       }
+
+      print("⭐ favorites from Firestore: $favoriteIds (length=${favoriteIds.length})");
+      print("📚 total courses loaded: ${tempProgrammesData.length}");
 
       // --- Step 5: Apply favorites filter ---
       Map<String, List<Map<String, dynamic>>> filteredData = {};
@@ -249,7 +254,6 @@ class _MentorDashboardState extends State<MentorDashboard> {
   }
 
   void _showCustomizationDialog(Map<String, dynamic> item) {
-    TextEditingController nicknameController = TextEditingController(text: item['nickname']);
     Color? selectedMainColor = item['color'] ?? Colors.teal[400];
 
     showDialog(
@@ -260,10 +264,6 @@ class _MentorDashboardState extends State<MentorDashboard> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                controller: nicknameController,
-                decoration: InputDecoration(labelText: 'Nickname'),
-              ),
               SizedBox(height: 16),
               MaterialColorPicker(
                 selectedColor: selectedMainColor,
@@ -282,7 +282,6 @@ class _MentorDashboardState extends State<MentorDashboard> {
             ElevatedButton(
               onPressed: () async {
                 setState(() {
-                  item['nickname'] = nicknameController.text;
                   item['color'] = selectedMainColor;
                 });
 
@@ -293,7 +292,6 @@ class _MentorDashboardState extends State<MentorDashboard> {
                   'mentorId': mentorId,
                   'sectionId': item['sectionId'],
                   'programmeId': item['programmeId'],
-                  'nickname': nicknameController.text,
                   'color': selectedMainColor?.value.toString(),
                   'subjectName': item['subjectName'],
                   'sectionName': item['sectionName'],
@@ -445,7 +443,7 @@ class _MentorDashboardState extends State<MentorDashboard> {
                 Text(
                   "Courses",
                   style: TextStyle(
-                    fontSize: 20,
+                    fontSize: 21,
                     fontWeight: FontWeight.bold,
                     color: Colors.teal,
                   ),
@@ -470,6 +468,7 @@ class _MentorDashboardState extends State<MentorDashboard> {
                   child: Text(
                     "All Courses",
                     style: TextStyle(
+                      fontSize: 19,
                       color: Colors.teal,
                       fontWeight: FontWeight.w600,
                     ),
@@ -481,108 +480,126 @@ class _MentorDashboardState extends State<MentorDashboard> {
 
             // ✅ Courses list
             Expanded(
-              child: ListView.separated(
+              child: ListView.builder(
                 itemCount: programmesData.length,
-                separatorBuilder: (_, __) =>
-                    Divider(height: 32, color: Colors.grey[300]),
                 itemBuilder: (context, index) {
-                  String programmeName =
-                  programmesData.keys.elementAt(index);
+                  String programmeName = programmesData.keys.elementAt(index);
                   List<dynamic> items = programmesData[programmeName]!;
 
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        programmeName,
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.teal[700],
-                        ),
-                      ),
-                      SizedBox(height: 10),
-                      ...items.map((item) {
-                        Color cardColor = _parseColor(item['color']) ??
-                            Colors.teal[400]!;
-                        Color textColor =
-                        cardColor.computeLuminance() > 0.5
-                            ? Colors.black87
-                            : Colors.white;
-                        Color subtitleColor =
-                        cardColor.computeLuminance() > 0.5
-                            ? Colors.black54
-                            : Colors.white70;
-
-                        return AnimatedContainer(
-                          duration: Duration(milliseconds: 300),
-                          curve: Curves.easeInOut,
-                          margin: const EdgeInsets.symmetric(vertical: 6),
+                  return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      child: Container(
                           decoration: BoxDecoration(
-                            color: cardColor,
+                            color: Colors.white,
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: cardColor.withOpacity(0.4),
+                                color: Colors.black.withOpacity(0.05),
                                 blurRadius: 6,
-                                offset: Offset(0, 4),
+                                offset: const Offset(0, 3),
                               ),
                             ],
                           ),
-                          child: ListTile(
-                            contentPadding: EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
-                            title: Text(
-                              item['nickname'].isNotEmpty
-                                  ? item['nickname']
-                                  : item['subjectName'],
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: textColor,
+                          child: Theme(
+                              data: Theme.of(context).copyWith(
+                                dividerColor: Colors.transparent, // hide default line
                               ),
-                            ),
-                            subtitle: Text(
-                              item['sectionName'],
-                              style: TextStyle(
-                                color: subtitleColor,
-                                fontSize: 14,
-                              ),
-                            ),
-                            trailing: PopupMenuButton(
-                              icon: Icon(Icons.more_vert, color: textColor),
-                              onSelected: (value) {
-                                if (value == 'customize') {
-                                  _showCustomizationDialog(item);
-                                }
-                              },
-                              itemBuilder: (context) => [
-                                PopupMenuItem(
-                                  value: 'customize',
-                                  child: Text('Customize'),
+                              child: ExpansionTile(
+                                tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
                                 ),
-                              ],
-                            ),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      SubjectSectionDetailsScreen(
-                                        subjectName: item['subjectName'],
-                                        sectionName: item['sectionName'],
-                                        subjectId: item['subjectId'],
-                                        sectionId: item['sectionId'],
-                                        mentorId: mentorId ?? '',
-                                        color: cardColor,
+                                collapsedShape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                leading: CircleAvatar(
+                                  backgroundColor: Colors.teal[100],
+                                  child: Icon(Icons.school, color: Colors.teal[700]),
+                                ),
+                                title: Text(
+                                  programmeName,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  "${items.length} courses",
+                                  style: const TextStyle(fontSize: 13, color: Colors.grey),
+                                ),
+                                trailing: const Icon(Icons.keyboard_arrow_down_rounded, size: 28),
+                                children: items.map((item) {
+                                  Color cardColor = _parseColor(item['color']) ?? Colors.teal[400]!;
+                                  Color textColor =
+                                  cardColor.computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
+                                  Color subtitleColor =
+                                  cardColor.computeLuminance() > 0.5 ? Colors.black54 : Colors.white70;
+
+                                  return Container(
+                                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: cardColor,
+                                      borderRadius: BorderRadius.circular(14),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: cardColor.withOpacity(0.3),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: ListTile(
+                                      contentPadding:
+                                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                      title: Text(
+                                        item['subjectName'] ?? 'Unnamed Subject',
+                                        style: TextStyle(
+                                          color: textColor,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
-                                ),
-                              );
-                            },
+                                      subtitle: Text(
+                                        "${item['subjectCode'] ?? ''} • ${item['sectionName'] ?? ''}",
+                                        style: TextStyle(color: subtitleColor, fontSize: 14),
+                                      ),
+                                      trailing: PopupMenuButton(
+                                        icon: Icon(Icons.more_vert, color: textColor),
+                                        onSelected: (value) {
+                                          if (value == 'customize') {
+                                            _showCustomizationDialog(item);
+                                          }
+                                        },
+                                        itemBuilder: (context) => [
+                                          const PopupMenuItem(
+                                            value: 'customize',
+                                            child: Text('Customize'),
+                                          ),
+                                        ],
+                                      ),
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => SubjectSectionDetailsScreen(
+                                              schoolId: item['schoolId'],
+                                              programmeId: item['programmeId'],
+                                              subjectName: item['subjectName'],
+                                              sectionName: item['sectionName'],
+                                              subjectId: item['subjectId'],
+                                              sectionId: item['sectionId'],
+                                              mentorId: mentorId ?? '',
+                                              color: cardColor,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
                           ),
-                        );
-                      }).toList(),
-                    ],
+                      ),
                   );
                 },
               ),
@@ -719,14 +736,17 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
             .get();
         if (!secSnap.exists) continue;
         final secName = secSnap.data()?["name"] ?? "Unnamed Section";
+        final subjCode = subjSnap.data()?["code"] ?? "";
 
         final item = {
           'programmeId': programmeId,
           'subjectId': subjectId,
           'sectionId': sectionId,
           'subjectName': subjName,
+          'subjectCode': subjCode,
           'sectionName': secName,
           'color': Colors.teal, // default
+          'schoolId': schoolId,
         };
 
         tempData.putIfAbsent(progName, () => []);
@@ -745,23 +765,42 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
   }
 
   Future<void> _toggleFavorite(String subjectId, String sectionId) async {
-    final key = "${subjectId}_$sectionId";
-    setState(() {
-      if (favoriteIds.contains(key)) {
-        favoriteIds.remove(key);
-      } else {
-        favoriteIds.add(key);
-      }
-      favoritesChanged = true;
-    });
+    final favKey = "${subjectId}_${sectionId}";
+    final docRef = FirebaseFirestore.instance
+        .collection("mentorFavorites")
+        .doc(widget.mentorId);
 
-    await FirebaseFirestore.instance
-        .collection('mentorFavorites')
-        .doc(widget.mentorId)
-        .set({
-      'favorites': favoriteIds.toList(),
-    });
+    final snap = await docRef.get();
+    if (snap.exists) {
+      final currentFavs = List<String>.from(snap.data()?['favorites'] ?? []);
+      if (currentFavs.contains(favKey)) {
+        await docRef.update({
+          'favorites': FieldValue.arrayRemove([favKey]),
+        });
+        setState(() {
+          favoriteIds.remove(favKey);   // ✅ 更新本地状态
+          favoritesChanged = true;
+        });
+      } else {
+        await docRef.update({
+          'favorites': FieldValue.arrayUnion([favKey]),
+        });
+        setState(() {
+          favoriteIds.add(favKey);   // ✅ 更新本地状态
+          favoritesChanged = true;
+        });
+      }
+    } else {
+      await docRef.set({
+        'favorites': [favKey],
+      });
+      setState(() {
+        favoriteIds.add(favKey);   // ✅ 更新本地状态
+        favoritesChanged = true;
+      });
+    }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -873,9 +912,11 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
 
                         return Card(
                           child: ListTile(
-                            title: Text(item['subjectName']),
-                            subtitle: Text(item['sectionName']),
-                            trailing: IconButton(
+                              title: Text(item['subjectName'] ?? 'Unnamed Subject'),
+                              subtitle: Text(
+                                "${item['subjectCode'] ?? ''} • ${item['sectionName'] ?? ''}",
+                              ),
+                          trailing: IconButton(
                               icon: Icon(
                                 isFav
                                     ? Icons.star
@@ -898,6 +939,8 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
                                       SubjectSectionDetailsScreen(
                                         subjectName: item['subjectName'],
                                         sectionName: item['sectionName'],
+                                        programmeId: item['programmeId'],
+                                        schoolId: item['schoolId'],
                                         subjectId: item['subjectId'],
                                         sectionId: item['sectionId'],
                                         mentorId: widget.mentorId,
@@ -963,17 +1006,22 @@ class _CourseSearchDelegate extends SearchDelegate<String> {
   }
 
   Widget _buildFilteredList() {
-    final normalizedQuery = query.trim().toLowerCase(); // 统一处理
+    final normalizedQuery = query.trim().toLowerCase();
     final results = <Map<String, dynamic>>[];
 
     allCourses.forEach((progName, items) {
       for (var item in items) {
         final subject = (item['subjectName'] ?? '').toLowerCase();
+        final code = (item['subjectCode'] ?? '').toLowerCase();
+        final section = (item['sectionName'] ?? '').toLowerCase();
 
-        if (normalizedQuery.isEmpty || subject.contains(normalizedQuery)) {
+        if (normalizedQuery.isEmpty ||
+            subject.contains(normalizedQuery) ||
+            code.contains(normalizedQuery) ||
+            section.contains(normalizedQuery)) {
           results.add({
-            ...item, // 保留原始数据
-            'programmeName': progName, // 额外加 programmeName 方便展示
+            ...item,
+            'programmeName': progName,
           });
         }
       }
@@ -991,14 +1039,16 @@ class _CourseSearchDelegate extends SearchDelegate<String> {
         final isFav = favoriteIds.contains(favKey);
 
         return ListTile(
-          title: Text(item['subjectName']),
-          subtitle: Text("${item['sectionName']} • ${item['programmeName']}"),
+          title: Text(item['subjectName'] ?? 'Unnamed Subject'),
+          subtitle: Text(
+            "${item['subjectCode'] ?? ''} • ${item['sectionName'] ?? ''} • ${item['programmeName'] ?? ''}",
+          ),
           trailing: Icon(
             isFav ? Icons.star : Icons.star_border,
             color: isFav ? Colors.yellow[700] : Colors.grey,
           ),
           onTap: () {
-            close(context, query); // 这里还是返回 query
+            close(context, query);
           },
         );
       },

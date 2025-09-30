@@ -11,71 +11,69 @@ class _EnrollmentRequestsScreenState extends State<EnrollmentRequestsScreen> {
 
   Future<void> _approveRequest(DocumentSnapshot reqDoc) async {
     final data = reqDoc.data() as Map<String, dynamic>;
-    final type = data["type"];
-    final studentId = data["studentId"];
-    final subjectId = data["subjectId"];
-    final currentSectionId = data["currentSectionId"];
-    final requestedSectionId = data["requestedSectionId"];
-    final schoolId = data["schoolId"];
-    final programmeId = data["programmeId"];
+    final studentId = data['studentId'];
+    final subjectId = data['subjectId'];
+    final type = data['type'];
 
     final batch = _firestore.batch();
 
-    final enrollmentRef = _firestore
-        .collection("subjectEnrollments")
-        .doc("${studentId}_$subjectId");
-
     if (type == "drop") {
-      batch.delete(enrollmentRef);
+      // remove enrollment
+      final enrollRef = _firestore.collection("subjectEnrollments").doc("${studentId}_$subjectId");
+      batch.delete(enrollRef);
 
-      if (currentSectionId != null) {
+      // decrement section count
+      final sectionId = data["sectionId"];
+      if (sectionId != null) {
         final secRef = _firestore
-            .collection("schools")
-            .doc(schoolId)
-            .collection("programmes")
-            .doc(programmeId)
-            .collection("subjects")
-            .doc(subjectId)
-            .collection("sections")
-            .doc(currentSectionId);
+            .collection("schools").doc(data["schoolId"])
+            .collection("programmes").doc(data["programmeId"])
+            .collection("subjects").doc(subjectId)
+            .collection("sections").doc(sectionId);
         batch.update(secRef, {"currentCount": FieldValue.increment(-1)});
       }
-    } else if (type == "exchange" && requestedSectionId != null) {
-      batch.update(enrollmentRef, {"sectionId": requestedSectionId});
+    }
+    else if (type == "exchange") {
+      final enrollRef = _firestore.collection("subjectEnrollments").doc("${studentId}_$subjectId");
 
       // decrement old
-      final oldSecRef = _firestore
-          .collection("schools")
-          .doc(schoolId)
-          .collection("programmes")
-          .doc(programmeId)
-          .collection("subjects")
-          .doc(subjectId)
-          .collection("sections")
-          .doc(currentSectionId);
-      batch.update(oldSecRef, {"currentCount": FieldValue.increment(-1)});
+      final oldSectionId = data["fromSectionId"];
+      if (oldSectionId != null) {
+        final oldRef = _firestore
+            .collection("schools").doc(data["schoolId"])
+            .collection("programmes").doc(data["programmeId"])
+            .collection("subjects").doc(subjectId)
+            .collection("sections").doc(oldSectionId);
+        batch.update(oldRef, {"currentCount": FieldValue.increment(-1)});
+      }
 
       // increment new
-      final newSecRef = _firestore
-          .collection("schools")
-          .doc(schoolId)
-          .collection("programmes")
-          .doc(programmeId)
-          .collection("subjects")
-          .doc(subjectId)
-          .collection("sections")
-          .doc(requestedSectionId);
-      batch.update(newSecRef, {"currentCount": FieldValue.increment(1)});
+      final newSectionId = data["toSectionId"];
+      if (newSectionId != null) {
+        final newRef = _firestore
+            .collection("schools").doc(data["schoolId"])
+            .collection("programmes").doc(data["programmeId"])
+            .collection("subjects").doc(subjectId)
+            .collection("sections").doc(newSectionId);
+        batch.update(newRef, {"currentCount": FieldValue.increment(1)});
+      }
+
+      // update student's enrollment
+      batch.update(enrollRef, {"sectionId": newSectionId});
     }
 
-    // instead of updating status, just delete the request
-    batch.delete(reqDoc.reference);
+    // ✅ keep request, mark approved
+    batch.update(reqDoc.reference, {"status": "approved", "processedAt": FieldValue.serverTimestamp()});
 
     await batch.commit();
   }
 
+
   Future<void> _rejectRequest(DocumentSnapshot reqDoc) async {
-    await reqDoc.reference.delete();
+    await reqDoc.reference.update({
+      "status": "rejected",
+      "processedAt": FieldValue.serverTimestamp(),
+    });
   }
 
   Future<String> _getStudentDisplay(String? studentId) async {

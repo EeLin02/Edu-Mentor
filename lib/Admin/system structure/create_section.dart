@@ -22,6 +22,13 @@ class _ManageSectionsScreenState extends State<ManageSectionsScreen> {
 
   String searchQuery = "";
 
+  // 🔹 For time slot creation
+  String? selectedDay;
+  TimeOfDay? startTime;
+  TimeOfDay? endTime;
+  List<Map<String, String>> sectionTimes = [];
+
+
   // 🔹 Utility to safely get "name"
   String _getName(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>?;
@@ -56,9 +63,8 @@ class _ManageSectionsScreenState extends State<ManageSectionsScreen> {
                     onChanged: (val) {
                       setDialogState(() {
                         filtered = items
-                            .where((s) => s['name']
-                            .toLowerCase()
-                            .contains(val.toLowerCase()))
+                            .where((s) =>
+                            s['name'].toLowerCase().contains(val.toLowerCase()))
                             .toList();
                       });
                     },
@@ -70,8 +76,15 @@ class _ManageSectionsScreenState extends State<ManageSectionsScreen> {
                     child: ListView.builder(
                       itemCount: filtered.length,
                       itemBuilder: (_, i) {
+                        final code = filtered[i]['code'];
+                        final name = filtered[i]['name'];
+
                         return ListTile(
-                          title: Text(filtered[i]['name']),
+                          title: Text(
+                            code != null && code.toString().isNotEmpty
+                                ? "$code - $name"
+                                : name, // ✅ only show code if exists
+                          ),
                           onTap: () => Navigator.pop(context, filtered[i]),
                         );
                       },
@@ -85,6 +98,7 @@ class _ManageSectionsScreenState extends State<ManageSectionsScreen> {
       },
     );
   }
+
 
   // 🔹 Styled field
   Widget _buildSelectionField({
@@ -129,31 +143,141 @@ class _ManageSectionsScreenState extends State<ManageSectionsScreen> {
 
   // 🔹 Edit Section
   void _editSection(QueryDocumentSnapshot doc) {
-    final currentName = _getName(doc);
+    final data = doc.data() as Map<String, dynamic>;
+    final currentName = data['name'] ?? '';
     final editController = TextEditingController(text: currentName);
+
+    // Safely convert Firestore list to List<Map<String, String>>
+    List<Map<String, dynamic>> times = (data['times'] as List<dynamic>?)
+        ?.map((t) => {
+      "day": t["day"] ?? "",
+      "start": t["start"] ?? "",
+      "end": t["end"] ?? "",
+    })
+        .toList() ??
+        [];
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text("Edit Section"),
-        content: TextField(controller: editController),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context), child: Text("Cancel")),
-          ElevatedButton(
-            onPressed: () async {
-              final newName = editController.text.trim();
-              if (newName.isNotEmpty) {
-                await doc.reference.update({'name': newName});
-                Navigator.pop(context);
-              }
-            },
-            child: Text("Update"),
-          ),
-        ],
-      ),
+      builder: (_) {
+        String? selectedDay;
+        TimeOfDay? start;
+        TimeOfDay? end;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text("Edit Section"),
+              content: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    TextField(
+                        controller: editController,
+                        decoration: InputDecoration(labelText: "Section Name")),
+
+                    SizedBox(height: 12),
+
+                    // ✅ Show existing times
+                    if (times.isNotEmpty)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: times.map((t) {
+                          return ListTile(
+                            title: Text("${t['day']} • ${t['start']} - ${t['end']}"),
+                            trailing: IconButton(
+                              icon: Icon(Icons.delete, color: Colors.red),
+                              onPressed: () {
+                                setDialogState(() => times.remove(t));
+                              },
+                            ),
+                          );
+                        }).toList(),
+                      ),
+
+                    SizedBox(height: 12),
+
+                    // Add new time slot
+                    DropdownButtonFormField<String>(
+                      decoration: InputDecoration(labelText: "Day"),
+                      value: selectedDay,
+                      items: [
+                        "Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"
+                      ].map((day) =>
+                          DropdownMenuItem(value: day, child: Text(day)))
+                          .toList(),
+                      onChanged: (val) => setDialogState(() => selectedDay = val),
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              final picked = await showTimePicker(
+                                  context: context, initialTime: TimeOfDay.now());
+                              if (picked != null) setDialogState(() => start = picked);
+                            },
+                            child: Text(start == null
+                                ? "Start Time"
+                                : "Start: ${start!.format(context)}"),
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              final picked = await showTimePicker(
+                                  context: context, initialTime: TimeOfDay.now());
+                              if (picked != null) setDialogState(() => end = picked);
+                            },
+                            child: Text(end == null
+                                ? "End Time"
+                                : "End: ${end!.format(context)}"),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    ElevatedButton(
+                      onPressed: () {
+                        if (selectedDay != null && start != null && end != null) {
+                          setDialogState(() {
+                            times.add({
+                              "day": selectedDay!,
+                              "start": start!.format(context),
+                              "end": end!.format(context),
+                            });
+                            selectedDay = null;
+                            start = null;
+                            end = null;
+                          });
+                        }
+                      },
+                      child: Text("Add Time Slot"),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: Text("Cancel")),
+                ElevatedButton(
+                  onPressed: () async {
+                    final newName = editController.text.trim();
+                    await doc.reference.update({
+                      'name': newName,
+                      'times': times,
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: Text("Update"),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
+
 
   // 🔹 Confirm Delete
   Future<bool?> _showDeleteConfirmDialog() {
@@ -187,7 +311,7 @@ class _ManageSectionsScreenState extends State<ManageSectionsScreen> {
       appBar: AppBar(title: Text("Manage Sections")),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
+        child: ListView(
           children: [
             /// --- School ---
             FutureBuilder<QuerySnapshot>(
@@ -199,7 +323,10 @@ class _ManageSectionsScreenState extends State<ManageSectionsScreen> {
                 if (!snapshot.hasData) return CircularProgressIndicator();
                 final schools = snapshot.data!.docs.map((doc) {
                   final data = doc.data() as Map<String, dynamic>;
-                  return {'id': doc.id, 'name': data['name'] ?? 'Unnamed'};
+                  return {
+                    'id': doc.id,
+                    'name': data['name'] ?? 'Unnamed',
+                  };
                 }).toList();
 
                 return _buildSelectionField(
@@ -211,6 +338,7 @@ class _ManageSectionsScreenState extends State<ManageSectionsScreen> {
                     if (selected != null) {
                       setState(() {
                         selectedSchoolId = selected['id'];
+                        // only show name for school (not code)
                         selectedSchoolName = selected['name'];
                         selectedProgrammeId = null;
                         selectedProgrammeName = null;
@@ -222,6 +350,7 @@ class _ManageSectionsScreenState extends State<ManageSectionsScreen> {
                 );
               },
             ),
+
             SizedBox(height: 12),
 
             /// --- Programme ---
@@ -275,25 +404,32 @@ class _ManageSectionsScreenState extends State<ManageSectionsScreen> {
                   if (!snapshot.hasData) return CircularProgressIndicator();
                   final subjects = snapshot.data!.docs.map((doc) {
                     final data = doc.data() as Map<String, dynamic>;
-                    return {'id': doc.id, 'name': data['name'] ?? 'Unnamed'};
+                    print("Subject data: $data");  // 👀 debug output
+                    return {
+                      'id': doc.id,
+                      'name': data['name'] ?? 'Unnamed',
+                      'code': data.containsKey('code') ? data['code'] : 'NoCode',
+                    };
                   }).toList();
 
                   return _buildSelectionField(
                     label: "Subject",
                     value: selectedSubjectName,
                     onTap: () async {
-                      final selected = await _showSearchableDialog(
-                          context, "Subject", subjects);
+                      final selected =
+                      await _showSearchableDialog(context, "Subject", subjects);
                       if (selected != null) {
                         setState(() {
                           selectedSubjectId = selected['id'];
-                          selectedSubjectName = selected['name'];
+                          selectedSubjectName =
+                          "${selected['code']} - ${selected['name']}"; // ✅ show ABC123 - Mathematics
                         });
                       }
                     },
                   );
                 },
               ),
+
             SizedBox(height: 12),
 
             /// --- Section Input ---
@@ -304,6 +440,95 @@ class _ManageSectionsScreenState extends State<ManageSectionsScreen> {
                 border: OutlineInputBorder(),
               ),
             ),
+            SizedBox(height: 12),
+
+            /// --- Time Picker for Section ---
+            DropdownButtonFormField<String>(
+              decoration: InputDecoration(labelText: "Day"),
+              value: selectedDay,
+              items: [
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday",
+                "Saturday",
+                "Sunday"
+              ]
+                  .map((day) =>
+                  DropdownMenuItem(value: day, child: Text(day)))
+                  .toList(),
+              onChanged: (val) => setState(() => selectedDay = val),
+            ),
+            SizedBox(height: 12),
+
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final picked = await showTimePicker(
+                          context: context, initialTime: TimeOfDay.now());
+                      if (picked != null) setState(() => startTime = picked);
+                    },
+                    child: Text(startTime == null
+                        ? "Select Start Time"
+                        : "Start: ${startTime!.format(context)}"),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final picked = await showTimePicker(
+                          context: context, initialTime: TimeOfDay.now());
+                      if (picked != null) setState(() => endTime = picked);
+                    },
+                    child: Text(endTime == null
+                        ? "Select End Time"
+                        : "End: ${endTime!.format(context)}"),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 12),
+
+            ElevatedButton(
+              onPressed: () {
+                if (selectedDay != null && startTime != null && endTime != null) {
+                  setState(() {
+                    sectionTimes.add({
+                      "day": selectedDay!,
+                      "start": startTime!.format(context),
+                      "end": endTime!.format(context),
+                    });
+                    selectedDay = null;
+                    startTime = null;
+                    endTime = null;
+                  });
+                }
+              },
+              child: Text("Add Time Slot"),
+            ),
+            SizedBox(height: 12),
+
+            if (sectionTimes.isNotEmpty)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: sectionTimes
+                    .map((t) => ListTile(
+                  title: Text(
+                      "${t['day']} • ${t['start']} - ${t['end']}"),
+                  trailing: IconButton(
+                    icon: Icon(Icons.close, color: Colors.red),
+                    onPressed: () {
+                      setState(() => sectionTimes.remove(t));
+                    },
+                  ),
+                ))
+                    .toList(),
+              ),
+
             SizedBox(height: 12),
 
             ElevatedButton(
@@ -321,10 +546,16 @@ class _ManageSectionsScreenState extends State<ManageSectionsScreen> {
                       .collection('subjects')
                       .doc(selectedSubjectId)
                       .collection('sections')
-                      .add({'name': name});
+                      .add({
+                    'name': name,
+                    'times': sectionTimes,
+                  });
 
                   await newSectionRef.update({'sectionId': newSectionRef.id});
                   sectionController.clear();
+                  setState(() {
+                    sectionTimes.clear();
+                  });
                 }
               },
               child: Text("Add Section"),
@@ -349,60 +580,68 @@ class _ManageSectionsScreenState extends State<ManageSectionsScreen> {
 
             /// --- Section List ---
             if (selectedSubjectId != null)
-              Expanded(
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('schools')
-                      .doc(selectedSchoolId)
-                      .collection('programmes')
-                      .doc(selectedProgrammeId)
-                      .collection('subjects')
-                      .doc(selectedSubjectId)
-                      .collection('sections')
-                      .orderBy('name')
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData)
-                      return Center(child: CircularProgressIndicator());
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('schools')
+                    .doc(selectedSchoolId)
+                    .collection('programmes')
+                    .doc(selectedProgrammeId)
+                    .collection('subjects')
+                    .doc(selectedSubjectId)
+                    .collection('sections')
+                    .orderBy('name')
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData)
+                    return Center(child: CircularProgressIndicator());
 
-                    final filteredSections = snapshot.data!.docs.where((doc) {
-                      final name = _getName(doc).toLowerCase();
-                      return name.contains(searchQuery);
-                    }).toList();
+                  final filteredSections = snapshot.data!.docs.where((doc) {
+                    final name = _getName(doc).toLowerCase();
+                    return name.contains(searchQuery);
+                  }).toList();
 
-                    if (filteredSections.isEmpty) {
-                      return Center(child: Text("No sections found."));
-                    }
+                  if (filteredSections.isEmpty) {
+                    return Center(child: Text("No sections found."));
+                  }
 
-                    return ListView(
-                      children: filteredSections.map((doc) {
-                        final name = _getName(doc);
-                        return ListTile(
-                          title: Text(name),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: Icon(Icons.edit, color: Colors.blue),
-                                onPressed: () => _editSection(doc),
-                              ),
-                              IconButton(
-                                icon: Icon(Icons.delete, color: Colors.red),
-                                onPressed: () async {
-                                  final confirmed =
-                                  await _showDeleteConfirmDialog();
-                                  if (confirmed == true) {
-                                    await doc.reference.delete();
-                                  }
-                                },
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    );
-                  },
-                ),
+                  return Column(
+                    children: filteredSections.map((doc) {
+                      final name = _getName(doc);
+                      return ListTile(
+                        title: Text(name),   // <-- This will now show "B1"
+                        subtitle: (doc.data() as Map<String, dynamic>)['times'] != null &&
+                            ((doc.data() as Map<String, dynamic>)['times'] as List).isNotEmpty
+                            ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: (doc.data() as Map<String, dynamic>)['times']
+                              .map<Widget>((t) => Text(
+                            "${t['day']} • ${t['start']} - ${t['end']}",
+                          ))
+                              .toList(),
+                        )
+                            : null,
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: Icon(Icons.edit, color: Colors.blue),
+                              onPressed: () => _editSection(doc),
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.delete, color: Colors.red),
+                              onPressed: () async {
+                                final confirmed = await _showDeleteConfirmDialog();
+                                if (confirmed == true) {
+                                  await doc.reference.delete();
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  );
+                },
               ),
           ],
         ),

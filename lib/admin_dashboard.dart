@@ -225,7 +225,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 _buildMenuTile(Icons.people, "Manage Accounts",
                     "View, edit, and disable users", () => _navigate(ManageAccountsScreen()), iconColor, textColor, subtitleColor),
                 _buildMenuTile(Icons.school, "System Structure",
-                    "Manage departments, classes & subjects", () => _navigate(SystemStructureScreen()), iconColor, textColor, subtitleColor),
+                    "Manage schools, programmes, subjects,etc.", () => _navigate(SystemStructureScreen()), iconColor, textColor, subtitleColor),
                 _buildMenuTile(Icons.announcement, "Notice Board",
                     "Publish announcements & updates", () => _navigate(NoticeBoardScreen()), iconColor, textColor, subtitleColor),
                 _buildMenuTile(Icons.announcement_outlined, "Manage Notices",

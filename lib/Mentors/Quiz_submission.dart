@@ -52,11 +52,11 @@ class SubmissionDetailScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    if (submissionData["studentProfileUrl"] != null)
+                    if (submissionData["profileUrl"] != null)
                       CircleAvatar(
                         radius: 40,
                         backgroundImage: NetworkImage(
-                            submissionData["studentProfileUrl"]),
+                            submissionData["profileUrl"]),
                       ),
                     const SizedBox(height: 8),
                     Text(

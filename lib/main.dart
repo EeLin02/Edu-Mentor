@@ -5,6 +5,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:month_year_picker/month_year_picker.dart';
 
 
 import 'package:provider/provider.dart';
@@ -189,6 +191,16 @@ class MyApp extends StatelessWidget {
       navigatorKey: navigatorKey,
       theme: themeNotifier.isDarkMode ? ThemeData.dark() : ThemeData.light(),
 
+      localizationsDelegates: [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        MonthYearPickerLocalizations.delegate, // <- add this
+      ],
+      supportedLocales: [
+        const Locale('en', ''),
+      ],
+
       initialRoute: '/login',
 
       routes: {
@@ -293,6 +305,8 @@ class MyApp extends StatelessWidget {
         '/takeAttendance': (context) {
           final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
           return TakeAttendanceScreen(
+            schoolId: args['schoolId'],          // 🔥 Missing before
+            programmeId: args['programmeId'],
             subjectId: args['subjectId'],
             sectionId: args['sectionId'],
             mentorId: args['mentorId'],

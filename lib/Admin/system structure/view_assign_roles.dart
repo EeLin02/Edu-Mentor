@@ -195,12 +195,14 @@ class _AssignmentsDashboardScreenState
       if (data['disabled'] != true) {
         map[doc.id] = {
           'name': data['name'] ?? 'Unknown',
-          'studentIdNo': data['studentIdNo'] ?? ''
+          'email': data['email'] ?? '',
+          'studentIdNo': data['studentIdNo'] ?? '',
         };
       }
     }
     return map;
   }
+
 
   Future<String> _getSubjectName(String schoolId, String programmeId, String subjectId) async {
     try {
@@ -212,10 +214,15 @@ class _AssignmentsDashboardScreenState
           .collection('subjects')
           .doc(subjectId)
           .get();
-      if (doc.exists) return doc['name'] ?? subjectId;
+      if (doc.exists) {
+        final name = doc['name'] ?? subjectId;
+        final code = doc['code'] ?? '';
+        return code.isNotEmpty ? "$name ($code)" : name;
+      }
     } catch (_) {}
     return subjectId;
   }
+
 
   Future<String> _getSectionName(String schoolId, String programmeId, String subjectId, String sectionId) async {
     try {
@@ -256,15 +263,20 @@ class _AssignmentsDashboardScreenState
       final sid = d['studentId'];
       if (sid == null || !studentData.containsKey(sid)) continue;
 
+      final sName = studentData[sid]['name'] ?? 'Unknown';
+      final sEmail = studentData[sid]['email'] ?? '';
+      final sIdNo = studentData[sid]['studentIdNo'] ?? '';
+      final displayName = sEmail.isNotEmpty ? "$sName ($sEmail)" : sName;
+
       entries.add(AssignmentEntry(
         id: sid,
-        name: studentData[sid]['name'],
+        name: displayName,
         role: 'Student',
         schoolId: d['schoolId'],
         programmeId: d['programmeId'],
         subjectId: d['subjectId'],
-        sectionId: d['sectionId'],
-        studentIdNo: studentData[sid]['studentIdNo'],
+        sectionId: d['sectionId'] ?? '',
+        studentIdNo: sIdNo,
       ));
     }
 
@@ -283,9 +295,13 @@ class _AssignmentsDashboardScreenState
       final mid = d['mentorId'];
       if (mid == null || !mentorData.containsKey(mid)) continue;
 
+      final mName = mentorData[mid]['name'] ?? 'Unknown';
+      final mEmail = mentorData[mid]['email'] ?? '';
+      final displayName = mEmail.isNotEmpty ? "$mName ($mEmail)" : mName;
+
       entries.add(AssignmentEntry(
         id: mid,
-        name: mentorData[mid]['name'],
+        name: displayName,
         role: 'Mentor',
         schoolId: d['schoolId'],
         programmeId: d['programmeId'],
@@ -294,7 +310,7 @@ class _AssignmentsDashboardScreenState
       ));
     }
 
-    // ✅ NOW build subjectNameCache after entries exist
+    //  Cache subject names
     for (var e in entries) {
       if (!subjectNameCache.containsKey(e.subjectId)) {
         subjectNameCache[e.subjectId] =
@@ -304,6 +320,7 @@ class _AssignmentsDashboardScreenState
 
     return entries;
   }
+
 
 
   @override
