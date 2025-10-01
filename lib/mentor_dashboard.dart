@@ -684,6 +684,21 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
 
   Future<void> _fetchAllCourses() async {
     try {
+      // --- Load customizations (same as dashboard) ---
+      final customizationsSnap = await FirebaseFirestore.instance
+          .collection("mentorCustomizations")
+          .where("mentorId", isEqualTo: widget.mentorId)
+          .get();
+
+      final Map<String, Map<String, dynamic>> customizations = {};
+      for (var doc in customizationsSnap.docs) {
+        final data = doc.data();
+        final sectionId = data['sectionId'];
+        if (sectionId != null) {
+          customizations[sectionId.toString()] = data;
+        }
+      }
+      // --- Load subjectMentors ---
       final subjectMentorSnapshot = await FirebaseFirestore.instance
           .collection("subjectMentors")
           .where("mentorId", isEqualTo: widget.mentorId)
@@ -722,6 +737,8 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
             .get();
         if (!subjSnap.exists) continue;
         final subjName = subjSnap.data()?["name"] ?? "Unnamed Subject";
+        final subjCode = subjSnap.data()?["code"] ?? "";
+
 
         // take section
         final secSnap = await FirebaseFirestore.instance
@@ -736,8 +753,24 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
             .get();
         if (!secSnap.exists) continue;
         final secName = secSnap.data()?["name"] ?? "Unnamed Section";
-        final subjCode = subjSnap.data()?["code"] ?? "";
 
+        // --- Apply customization ---
+        final customization = customizations[sectionId];
+        final storedColor = customization?['color'];
+
+        Color cardColor = Colors.teal.shade400;
+        if (storedColor != null) {
+          try {
+            if (storedColor is String && storedColor.startsWith('#')) {
+              cardColor =
+                  Color(int.parse(storedColor.replaceFirst('#', '0xff')));
+            } else {
+              cardColor = Color(int.parse(storedColor.toString()));
+            }
+          } catch (e) {
+            print("⚠️ Failed to parse color: $storedColor → $e");
+          }
+        }
         final item = {
           'programmeId': programmeId,
           'subjectId': subjectId,
@@ -745,7 +778,7 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
           'subjectName': subjName,
           'subjectCode': subjCode,
           'sectionName': secName,
-          'color': Colors.teal, // default
+          'color': cardColor, // default
           'schoolId': schoolId,
         };
 
@@ -778,7 +811,7 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
           'favorites': FieldValue.arrayRemove([favKey]),
         });
         setState(() {
-          favoriteIds.remove(favKey);   // ✅ 更新本地状态
+          favoriteIds.remove(favKey);
           favoritesChanged = true;
         });
       } else {
@@ -786,7 +819,7 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
           'favorites': FieldValue.arrayUnion([favKey]),
         });
         setState(() {
-          favoriteIds.add(favKey);   // ✅ 更新本地状态
+          favoriteIds.add(favKey);
           favoritesChanged = true;
         });
       }
@@ -795,7 +828,7 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
         'favorites': [favKey],
       });
       setState(() {
-        favoriteIds.add(favKey);   // ✅ 更新本地状态
+        favoriteIds.add(favKey);
         favoritesChanged = true;
       });
     }
@@ -911,32 +944,39 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
                         final isFav = favoriteIds.contains(favKey);
 
                         return Card(
-                          child: ListTile(
-                              title: Text(item['subjectName'] ?? 'Unnamed Subject'),
-                              subtitle: Text(
-                                "${item['subjectCode'] ?? ''} • ${item['sectionName'] ?? ''}",
-                              ),
-                          trailing: IconButton(
-                              icon: Icon(
-                                isFav
-                                    ? Icons.star
-                                    : Icons.star_border,
-                                color: isFav
-                                    ? Colors.yellow[700]
-                                    : Colors.grey,
-                              ),
-                              onPressed: () =>
-                                  _toggleFavorite(
-                                    item['subjectId'],
-                                    item['sectionId'],
+                          color: item['color'],
+                          child: Builder(
+                            builder: (context) {
+                              final Color cardColor = item['color'] ?? Colors.teal.shade400;
+                              final Color textColor = cardColor.computeLuminance() > 0.5
+                                  ? Colors.black87
+                                  : Colors.white;
+                              final Color subtitleColor = cardColor.computeLuminance() > 0.5
+                                  ? Colors.black54
+                                  : Colors.white70;
+
+                              return ListTile(
+                                title: Text(
+                                  item['subjectName'] ?? 'Unnamed Subject',
+                                  style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
+                                ),
+                                subtitle: Text(
+                                  "${item['subjectCode'] ?? ''} • ${item['sectionName'] ?? ''}",
+                                  style: TextStyle(color: subtitleColor),
+                                ),
+                                trailing: IconButton(
+                                  icon: Icon(
+                                    isFav ? Icons.star : Icons.star_border,
+                                    color: isFav ? Colors.yellow[700] : Colors.black87,
                                   ),
-                            ),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      SubjectSectionDetailsScreen(
+                                  onPressed: () =>
+                                      _toggleFavorite(item['subjectId'], item['sectionId']),
+                                ),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => SubjectSectionDetailsScreen(
                                         subjectName: item['subjectName'],
                                         sectionName: item['sectionName'],
                                         programmeId: item['programmeId'],
@@ -944,9 +984,11 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
                                         subjectId: item['subjectId'],
                                         sectionId: item['sectionId'],
                                         mentorId: widget.mentorId,
-                                        color: item['color'] ?? Colors.teal,
+                                        color: cardColor,
                                       ),
-                                ),
+                                    ),
+                                  );
+                                },
                               );
                             },
                           ),

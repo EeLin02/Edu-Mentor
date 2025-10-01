@@ -658,6 +658,21 @@ class _AllCoursesScreenState extends State<AllCoursesScreen> {
 
   Future<void> _loadAllCourses() async {
     try {
+      // --- Load customizations (same as dashboard) ---
+      final customizationsSnap = await FirebaseFirestore.instance
+          .collection("studentCustomizations")
+          .where("studentId", isEqualTo: widget.studentId)
+          .get();
+
+      final Map<String, Map<String, dynamic>> customizations = {};
+      for (var doc in customizationsSnap.docs) {
+        final data = doc.data();
+        final sectionId = data['sectionId'];
+        if (sectionId != null) {
+          customizations[sectionId.toString()] = data;
+        }
+      }
+      // --- Load subjectEnrollments ---
       final enrollmentSnap = await FirebaseFirestore.instance
           .collection('subjectEnrollments')
           .where('studentId', isEqualTo: widget.studentId)
@@ -703,6 +718,24 @@ class _AllCoursesScreenState extends State<AllCoursesScreen> {
 
         if (!sectionDoc.exists) continue;
 
+        // --- Apply customization ---
+        final customization = customizations[sectionId];
+        final storedColor = customization?['color'];
+
+        Color cardColor = Colors.blue.shade400;
+        if (storedColor != null) {
+          try {
+            if (storedColor is String && storedColor.startsWith('#')) {
+              cardColor =
+                  Color(int.parse(storedColor.replaceFirst('#', '0xff')));
+            } else {
+              cardColor = Color(int.parse(storedColor.toString()));
+            }
+          } catch (e) {
+            print("⚠️ Failed to parse color: $storedColor → $e");
+          }
+        }
+
         tempList.add({
           'subjectId': subjectId,
           'sectionId': sectionId,
@@ -711,7 +744,10 @@ class _AllCoursesScreenState extends State<AllCoursesScreen> {
           'subjectName': subjectDoc.data()?['name'] ?? 'Unknown Subject',
           'subjectCode': subjectDoc.data()?['code'] ?? '',
           'sectionName': sectionDoc.data()?['name'] ?? 'Unknown Section',
+          'color': cardColor, // default
         });
+
+
       }
 
       setState(() {
@@ -798,37 +834,59 @@ class _AllCoursesScreenState extends State<AllCoursesScreen> {
                   favoriteSectionIds.contains(favKey);
 
                   return Card(
-                    margin: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
+                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    color: item['color'], // ✅ card background
+                    elevation: 4,
                     child: ListTile(
-                      title: Text(item['subjectName']),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+
+                      // 🔹 Dynamic text colors like dashboard
+                      title: Text(
+                        item['subjectName'],
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          color: (item['color'] as Color).computeLuminance() > 0.5
+                              ? Colors.black87
+                              : Colors.white,
+                        ),
+                      ),
                       subtitle: Text(
-                      "${item['subjectCode']} . ${item['sectionName']}",),
+                        "${item['subjectCode']} . ${item['sectionName']}",
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: (item['color'] as Color).computeLuminance() > 0.5
+                              ? Colors.black54
+                              : Colors.white70,
+                        ),
+                      ),
                       trailing: IconButton(
                         icon: Icon(
-                          isFav
+                          favoriteSectionIds.contains("${item['subjectId']}_${item['sectionId']}")
                               ? Icons.star
                               : Icons.star_border,
-                          color: isFav
+                          color: favoriteSectionIds.contains("${item['subjectId']}_${item['sectionId']}")
                               ? Colors.yellow[700]
-                              : Colors.grey,
+                              : ((item['color'] as Color).computeLuminance() > 0.5
+                              ? Colors.black87
+                              : Colors.white70),
                         ),
-                        onPressed: () => _toggleFavorite(
-                            item['subjectId'], item['sectionId']),
+                        onPressed: () =>
+                            _toggleFavorite(item['subjectId'], item['sectionId']),
                       ),
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                                StudentSubjectSectionsDetailsScreen(
-                                  subjectId: item['subjectId'],
-                                  sectionId: item['sectionId'],
-                                  schoolId: item['schoolId'],
-                                  programmeId: item['programmeId'],
-                                  studentId: widget.studentId,
-                                  color: Colors.blue,
-                                ),
+                            builder: (_) => StudentSubjectSectionsDetailsScreen(
+                              subjectId: item['subjectId'],
+                              sectionId: item['sectionId'],
+                              schoolId: item['schoolId'],
+                              programmeId: item['programmeId'],
+                              studentId: widget.studentId,
+                              color: item['color'], // keep passing color
+                            ),
                           ),
                         );
                       },

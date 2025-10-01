@@ -1,19 +1,17 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
 import 'student_notice_comment_screen.dart';
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
-
+import '../file_preview_screen.dart';
 
 class NoticeScreen extends StatelessWidget {
-  const NoticeScreen({super.key});
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Notices',style: TextStyle(color: Colors.blue),),
-      ),
+      appBar: AppBar(title: const Text('Notices')),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('notices')
@@ -21,10 +19,10 @@ class NoticeScreen extends StatelessWidget {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return Center(child: Text('Something went wrong.'));
+            return const Center(child: Text('Something went wrong.'));
           }
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator());
           }
 
           final notices = snapshot.data!.docs;
@@ -36,10 +34,11 @@ class NoticeScreen extends StatelessWidget {
               final noticeId = notices[index].id;
               final currentUser = FirebaseAuth.instance.currentUser;
               final likes = Map<String, dynamic>.from(data['likes'] ?? {});
-              final isLiked = currentUser != null && likes.containsKey(currentUser.uid);
+              final isLiked =
+                  currentUser != null && likes.containsKey(currentUser.uid);
 
               return Card(
-                margin: EdgeInsets.all(10),
+                margin: const EdgeInsets.all(10),
                 elevation: 4,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(15),
@@ -52,116 +51,251 @@ class NoticeScreen extends StatelessWidget {
                       // Title
                       Text(
                         data['title'] ?? 'No Title',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
-                      SizedBox(height: 8),
+                      const SizedBox(height: 8),
+
                       // Description
                       Text(data['description'] ?? 'No Description'),
-                      SizedBox(height: 8),
-                      // Images
+                      const SizedBox(height: 8),
+
+                      // Files Preview
                       if (data['fileUrls'] != null && data['fileUrls'] is List)
                         Column(
                           children: List.generate(
                             (data['fileUrls'] as List).length,
-                                (i) => Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 6),
-                              child: SizedBox(
-                                width: double.infinity,
-                                height: 200,
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      final fileUrl = data['fileUrls'][i];
-                                      if (fileUrl.toLowerCase().contains('.pdf')) {
+                                (i) {
+                              final fileUrl = data['fileUrls'][i];
+                              final lowerUrl = fileUrl.toLowerCase().split('?').first; // strip query params
+
+                              return Padding(
+                                padding:
+                                const EdgeInsets.symmetric(vertical: 6),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  height: 200,
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: GestureDetector(
+                                      onTap: () {
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (_) => PdfViewerScreen(pdfUrl: fileUrl),
+                                            builder: (_) => FilePreviewScreen(
+                                              fileUrl: fileUrl,
+                                              fileName: Uri.decodeFull(
+                                                fileUrl
+                                                    .split('/')
+                                                    .last
+                                                    .split('?')
+                                                    .first,
+                                              ),
+                                            ),
                                           ),
                                         );
-                                      } else {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => FullscreenImageView(imageUrl: fileUrl),
-                                          ),
-                                        );
-                                      }
-                                    },
-                                    child: data['fileUrls'][i].toLowerCase().contains('.pdf')
-                                        ? Container(
-                                      height: 200,
-                                      color: Colors.grey[300],
-                                      child: Center(
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(Icons.picture_as_pdf, size: 60, color: Colors.red),
-                                            SizedBox(height: 10),
-                                            Text('PDF Document', style: TextStyle(fontSize: 16)),
-                                          ],
-                                        ),
+                                      },
+                                      child: Builder(
+                                        builder: (_) {
+                                          // PDF
+                                          if (lowerUrl.endsWith('.pdf')) {
+                                            return Container(
+                                              color: Colors.grey[300],
+                                              child: const Center(
+                                                child: Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(Icons.picture_as_pdf, size: 60, color: Colors.red),
+                                                    SizedBox(height: 10),
+                                                    Text('PDF Document', style: TextStyle(fontSize: 16)),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          }
+
+                                          // VIDEO
+                                          else if (lowerUrl.endsWith('.mp4') || lowerUrl.endsWith('.mov')) {
+                                            return FutureBuilder<Uint8List?>(
+                                              future: VideoThumbnail.thumbnailData(
+                                                video: fileUrl,
+                                                imageFormat: ImageFormat.PNG,
+                                                maxWidth: 400,
+                                                quality: 75,
+                                              ),
+                                              builder: (context, snapshot) {
+                                                if (snapshot.connectionState == ConnectionState.waiting) {
+                                                  return Container(
+                                                    color: Colors.black26,
+                                                    child: const Center(child: CircularProgressIndicator()),
+                                                  );
+                                                }
+                                                if (snapshot.hasData) {
+                                                  return Stack(
+                                                    fit: StackFit.expand,
+                                                    children: [
+                                                      Image.memory(snapshot.data!, fit: BoxFit.cover),
+                                                      const Center(
+                                                        child: Icon(Icons.play_circle_fill,
+                                                            size: 70, color: Colors.white),
+                                                      ),
+                                                    ],
+                                                  );
+                                                }
+                                                return Container(
+                                                  color: Colors.black26,
+                                                  child: const Center(
+                                                    child: Icon(Icons.videocam, size: 60, color: Colors.grey),
+                                                  ),
+                                                );
+                                              },
+                                            );
+                                          }
+
+                                          // WORD
+                                          else if (lowerUrl.endsWith('.doc') || lowerUrl.endsWith('.docx')) {
+                                            return Container(
+                                              color: Colors.blue[100],
+                                              child: const Center(
+                                                child: Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(Icons.description, size: 60, color: Colors.blue),
+                                                    SizedBox(height: 10),
+                                                    Text('Word Document', style: TextStyle(fontSize: 16)),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          }
+
+                                          // EXCEL
+                                          else if (lowerUrl.endsWith('.xls') || lowerUrl.endsWith('.xlsx')) {
+                                            return Container(
+                                              color: Colors.green[100],
+                                              child: const Center(
+                                                child: Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(Icons.table_chart, size: 60, color: Colors.green),
+                                                    SizedBox(height: 10),
+                                                    Text('Excel Sheet', style: TextStyle(fontSize: 16)),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          }
+
+                                          // POWERPOINT
+                                          else if (lowerUrl.endsWith('.ppt') || lowerUrl.endsWith('.pptx')) {
+                                            return Container(
+                                              color: Colors.orange[100],
+                                              child: const Center(
+                                                child: Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(Icons.slideshow, size: 60, color: Colors.orange),
+                                                    SizedBox(height: 10),
+                                                    Text('PowerPoint', style: TextStyle(fontSize: 16)),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          }
+
+                                          // IMAGE (jpg, png, etc.)
+                                          else if (lowerUrl.endsWith('.jpg') ||
+                                              lowerUrl.endsWith('.jpeg') ||
+                                              lowerUrl.endsWith('.png') ||
+                                              lowerUrl.endsWith('.gif') ||
+                                              lowerUrl.endsWith('.webp')) {
+                                            return CachedNetworkImage(
+                                              imageUrl: fileUrl,
+                                              fit: BoxFit.cover,
+                                              placeholder: (context, url) =>
+                                              const Center(child: CircularProgressIndicator()),
+                                              errorWidget: (context, url, error) =>
+                                              const Icon(Icons.error, color: Colors.red),
+                                            );
+                                          }
+
+                                          // OTHER FILES → generic icon
+                                          else {
+                                            return Container(
+                                              color: Colors.grey[200],
+                                              child: const Center(
+                                                child: Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(Icons.insert_drive_file,
+                                                        size: 60, color: Colors.grey),
+                                                    SizedBox(height: 10),
+                                                    Text('Unsupported File', style: TextStyle(fontSize: 16)),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                        },
                                       ),
-                                    )
-                                        : CachedNetworkImage(
-                                      imageUrl: data['fileUrls'][i],
-                                      fit: BoxFit.cover,
-                                      placeholder: (context, url) => Center(child: CircularProgressIndicator()),
-                                      errorWidget: (context, url, error) => Icon(Icons.error),
                                     ),
                                   ),
-
-
                                 ),
-                              ),
-                            ),
+                              );
+                            },
                           ),
                         ),
-                      SizedBox(height: 8),
+
+                      const SizedBox(height: 8),
+
                       // Timestamp
                       Text(
                         (data['timestamp'] != null)
                             ? (data['timestamp'].toDate().toString())
                             : 'No Timestamp',
-                        style: TextStyle(color: Colors.grey),
+                        style: const TextStyle(color: Colors.grey),
                       ),
-                      Divider(),
-// Like and Comment Buttons row remains the same here
+                      const Divider(),
+
+                      // Like and Comment
                       Row(
                         children: [
                           IconButton(
                             icon: Icon(
-                              isLiked ? Icons.thumb_up : Icons.thumb_up_alt_outlined,
+                              isLiked
+                                  ? Icons.thumb_up
+                                  : Icons.thumb_up_alt_outlined,
                               color: isLiked ? Colors.blue : Colors.grey,
                             ),
                             onPressed: () async {
                               if (currentUser == null) return;
-                              final noticeRef = FirebaseFirestore.instance.collection('notices').doc(noticeId);
+                              final noticeRef = FirebaseFirestore.instance
+                                  .collection('notices')
+                                  .doc(noticeId);
                               await noticeRef.update({
-                                'likes.${currentUser.uid}': isLiked ? FieldValue.delete() : true,
+                                'likes.${currentUser.uid}': isLiked
+                                    ? FieldValue.delete()
+                                    : true,
                               });
                             },
                           ),
                           Text('${likes.length} Likes'),
-                          SizedBox(width: 20),
+                          const SizedBox(width: 20),
                           IconButton(
-                            icon: Icon(Icons.comment_outlined),
+                            icon: const Icon(Icons.comment_outlined),
                             onPressed: () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => NoticeCommentScreen(noticeId: noticeId),
+                                  builder: (_) =>
+                                      NoticeCommentScreen(noticeId: noticeId),
                                 ),
                               );
                             },
                           ),
-                          Text('Comment'),
+                          const Text('Comment'),
                         ],
                       ),
-                      SizedBox(height: 8),
-// Latest comments under the buttons
-                      LatestCommentsWidget(noticeId: noticeId),
                     ],
                   ),
                 ),
@@ -336,18 +470,4 @@ class _LatestCommentsWidgetState extends State<LatestCommentsWidget> {
   }
 }
 
-//--------------pdf fullscreen view------------
 
-class PdfViewerScreen extends StatelessWidget {
-  final String pdfUrl;
-
-  const PdfViewerScreen({required this.pdfUrl, super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('PDF Preview')),
-      body: SfPdfViewer.network(pdfUrl),
-    );
-  }
-}

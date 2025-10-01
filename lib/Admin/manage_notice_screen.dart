@@ -4,6 +4,7 @@ import 'package:video_player/video_player.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'edit_notice_screen.dart';  // Import the new edit screen
 import 'comments_view.dart';
+import '../file_preview_screen.dart';
 
 class ManageNoticesScreen extends StatefulWidget {
   @override
@@ -246,25 +247,52 @@ class _ManageNoticesScreenState extends State<ManageNoticesScreen> {
                         runSpacing: 8,
                         children: List.generate(fileUrls.length, (fileIndex) {
                           final fileUrl = fileUrls[fileIndex];
-                          final fileName = fileNames[fileIndex];
+
+                          // ✅ Safe filename extraction (fallback if fileNames shorter)
+                          String fileName;
+                          if (fileIndex < fileNames.length) {
+                            fileName = fileNames[fileIndex];
+                          } else {
+                            fileName = Uri.decodeFull(fileUrl.split('/').last.split('?').first);
+                          }
+
                           final fileType = fileName.split('.').last.toLowerCase();
 
+                          Widget fileWidget;
+
                           if (['jpg', 'jpeg', 'png'].contains(fileType)) {
-                            return Image.network(
+                            fileWidget = Image.network(
                               fileUrl,
                               width: 100,
                               height: 100,
                               fit: BoxFit.cover,
                             );
                           } else if (['mp4', 'mov'].contains(fileType)) {
-                            return VideoPreview(url: fileUrl);
+                            fileWidget = VideoPreview(url: fileUrl);
                           } else if (fileType == 'pdf') {
-                            return Icon(Icons.picture_as_pdf, size: 40, color: Colors.red);
+                            fileWidget = Icon(Icons.picture_as_pdf, size: 40, color: Colors.red);
                           } else {
-                            return Icon(Icons.insert_drive_file, size: 40, color: Colors.blue);
+                            fileWidget = Icon(Icons.insert_drive_file, size: 40, color: Colors.blue);
                           }
+
+                          // 👇 Wrap with GestureDetector to open FilePreviewScreen
+                          return GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => FilePreviewScreen(
+                                    fileUrl: fileUrl,
+                                    fileName: fileName,
+                                  ),
+                                ),
+                              );
+                            },
+                            child: fileWidget,
+                          );
                         }),
                       ),
+
                       SizedBox(height: 8),
                       FutureBuilder<QuerySnapshot>(
                         future: FirebaseFirestore.instance

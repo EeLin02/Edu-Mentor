@@ -1,27 +1,17 @@
-import 'dart:io';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_pdfview/flutter_pdfview.dart';
-import 'package:dio/dio.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'package:permission_handler/permission_handler.dart';
-import 'package:device_info_plus/device_info_plus.dart';
-
-
+import '../file_preview_screen.dart'; // 👈 import file preview
 
 class PreviewAnnouncementScreen extends StatefulWidget {
   final Map<String, dynamic> data;
   final Color color;
 
-
   const PreviewAnnouncementScreen({
     Key? key,
     required this.data,
     required this.color,
-
   }) : super(key: key);
 
   @override
@@ -61,15 +51,15 @@ class _PreviewAnnouncementScreenState extends State<PreviewAnnouncementScreen> {
 
   @override
   Widget build(BuildContext context) {
-
-    final postedTimestamp = widget.data['timestamp']; // Retrieve the posted timestamp
+    final postedTimestamp = widget.data['timestamp'];
     final externalLinks = widget.data['externalLinks'] as List? ?? [];
 
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.data['title'] ?? 'Announcement'),
         backgroundColor: widget.color,
-        foregroundColor: ThemeData.estimateBrightnessForColor(widget.color) == Brightness.dark
+        foregroundColor:
+        ThemeData.estimateBrightnessForColor(widget.color) == Brightness.dark
             ? Colors.white
             : Colors.black87,
       ),
@@ -94,7 +84,7 @@ class _ModernAnnouncementCard extends StatelessWidget {
   final Future<List<Map<String, dynamic>>> mentorDetailsFuture;
   final List<dynamic> files;
   final List<dynamic> externalLinks;
-  final dynamic postedTimestamp; // Dynamic type to handle different formats of timestamps
+  final dynamic postedTimestamp;
 
   const _ModernAnnouncementCard({
     Key? key,
@@ -124,14 +114,13 @@ class _ModernAnnouncementCard extends StatelessWidget {
             const SizedBox(height: 16),
             _buildPostedTimestamp(theme),
             _buildTitleAndSubtitle(theme),
-
             if (externalLinks.isNotEmpty) ...[
               const Divider(thickness: 1.2, height: 30),
               _buildExternalLinksSection(context, theme),
             ],
             if (files.isNotEmpty) ...[
               const Divider(thickness: 1.2, height: 30),
-              _buildFilesSection(context, theme), // Pass context explicitly
+              _buildFilesSection(context, theme),
             ],
           ],
         ),
@@ -139,21 +128,16 @@ class _ModernAnnouncementCard extends StatelessWidget {
     );
   }
 
-
   Widget _buildMentorSection(ThemeData theme) {
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: mentorDetailsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Text(
-            'Loading mentors...',
-            style: theme.textTheme.bodyLarge?.copyWith(color: Colors.grey),
-          );
+          return Text('Loading mentors...',
+              style: theme.textTheme.bodyLarge?.copyWith(color: Colors.grey));
         } else if (snapshot.hasError) {
-          return Text(
-            'Error loading mentors',
-            style: theme.textTheme.bodyLarge?.copyWith(color: Colors.red),
-          );
+          return Text('Error loading mentors',
+              style: theme.textTheme.bodyLarge?.copyWith(color: Colors.red));
         } else if (snapshot.hasData && snapshot.data!.isNotEmpty) {
           return Column(
             children: snapshot.data!.map((mentor) {
@@ -165,23 +149,18 @@ class _ModernAnnouncementCard extends StatelessWidget {
                         ? NetworkImage(mentor['profileUrl'])
                         : null,
                     child: mentor['profileUrl'].isEmpty
-                        ? Icon(Icons.person, size: 30, color: Colors.grey)
+                        ? const Icon(Icons.person, size: 30, color: Colors.grey)
                         : null,
                   ),
                   const SizedBox(width: 12),
-                  Text(
-                    mentor['name'],
-                    style: theme.textTheme.titleMedium,
-                  ),
+                  Text(mentor['name'], style: theme.textTheme.titleMedium),
                 ],
               );
             }).toList(),
           );
         } else {
-          return Text(
-            'No mentors assigned',
-            style: theme.textTheme.bodyLarge,
-          );
+          return Text('No mentors assigned',
+              style: theme.textTheme.bodyLarge);
         }
       },
     );
@@ -197,28 +176,21 @@ class _ModernAnnouncementCard extends StatelessWidget {
     final formattedTimestamp =
     timestamp != null ? '${timestamp.toLocal()}'.split(' ')[0] : 'Unknown';
 
-    return Text(
-      'Posted: $formattedTimestamp',
-      style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
-    );
+    return Text('Posted: $formattedTimestamp',
+        style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey));
   }
 
   Widget _buildTitleAndSubtitle(ThemeData theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Colors.teal[700],
-          ),
-        ),
+        Text(title,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Colors.teal[700],
+            )),
         const SizedBox(height: 8),
-        Text(
-          description,
-          style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
-        ),
+        Text(description, style: theme.textTheme.bodyMedium?.copyWith(height: 1.5)),
       ],
     );
   }
@@ -227,13 +199,11 @@ class _ModernAnnouncementCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Links',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Colors.teal,
-          ),
-        ),
+        Text('Links',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Colors.teal,
+            )),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -243,19 +213,16 @@ class _ModernAnnouncementCard extends StatelessWidget {
                 link.toString(),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: Colors.teal),
+                style: const TextStyle(color: Colors.teal),
               ),
               backgroundColor: Colors.white,
               onPressed: () async {
                 final url = Uri.parse(link.toString());
                 if (await canLaunchUrl(url)) {
-                  await launchUrl(
-                    url,
-                    mode: LaunchMode.externalApplication, // 🔥 KEY CHANGE
-                  );
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Could not open link')),
+                    const SnackBar(content: Text('Could not open link')),
                   );
                 }
               },
@@ -268,212 +235,46 @@ class _ModernAnnouncementCard extends StatelessWidget {
 
   Widget _buildFilesSection(BuildContext context, ThemeData theme) {
     Icon _getFileIcon(String fileName) {
-      final ext = fileName.toLowerCase();
-      if (ext.endsWith('.pdf'))
-        return Icon(Icons.picture_as_pdf, color: Colors.red);
-      if (ext.endsWith('.doc') || ext.endsWith('.docx'))
-        return Icon(Icons.description, color: Colors.blueAccent);
-      if (ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png'))
-        return Icon(Icons.image, color: Colors.green);
-      return Icon(Icons.attach_file, color: Colors.teal); // Default
+      final lower = fileName.toLowerCase();
+      if (lower.endsWith('.pdf')) return const Icon(Icons.picture_as_pdf, color: Colors.red);
+      if (lower.endsWith('.doc') || lower.endsWith('.docx')) return const Icon(Icons.description, color: Colors.blue);
+      if (lower.endsWith('.ppt') || lower.endsWith('.pptx')) return const Icon(Icons.slideshow, color: Colors.orange);
+      if (lower.endsWith('.xls') || lower.endsWith('.xlsx')) return const Icon(Icons.table_chart, color: Colors.green);
+      if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png')) return const Icon(Icons.image, color: Colors.teal);
+      if (lower.endsWith('.mp4') || lower.endsWith('.mov')) return const Icon(Icons.videocam, color: Colors.purple);
+      return const Icon(Icons.attach_file, color: Colors.grey);
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Attached Files',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Colors.teal,
-          ),
-        ),
+        Text('Attached Files',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Colors.teal,
+            )),
         const SizedBox(height: 8),
         ...files.map((fileUrl) {
           final decodedUrl = Uri.decodeFull(fileUrl.toString());
-          final fileName = decodedUrl
-              .split('/')
-              .last
-              .split('?')
-              .first;
+          final fileName = decodedUrl.split('/').last.split('?').first;
 
           return ListTile(
             leading: _getFileIcon(fileName),
             title: Text(fileName),
-              onTap: () {
-                final isPdf = fileName.toLowerCase().endsWith('.pdf');
-                final isImage = fileName.toLowerCase().endsWith('.jpg') ||
-                    fileName.toLowerCase().endsWith('.jpeg') ||
-                    fileName.toLowerCase().endsWith('.png');
-
-                if (isPdf || isImage) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          FilePreviewScreen(fileUrl: fileUrl.toString()),
-                    ),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('File preview not supported for this type.')),
-                  );
-                }
-              }
-
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => FilePreviewScreen(
+                    fileUrl: fileUrl.toString(),
+                    fileName: fileName, // pass file name
+                  ),
+                ),
+              );
+            },
           );
         }).toList(),
       ],
-    );
-  }
-}
-
-
-class FilePreviewScreen extends StatefulWidget {
-  final String fileUrl;
-
-  const FilePreviewScreen({Key? key, required this.fileUrl}) : super(key: key);
-
-  @override
-  State<FilePreviewScreen> createState() => _FilePreviewScreenState();
-}
-
-class _FilePreviewScreenState extends State<FilePreviewScreen> {
-  late String fileName;
-
-  @override
-  void initState() {
-    super.initState();
-    fileName = _extractFileName(widget.fileUrl);
-  }
-
-  bool _isPdf(String name) => name.toLowerCase().endsWith('.pdf');
-
-  bool _isImage(String name) {
-    final lower = name.toLowerCase();
-    return lower.endsWith('.jpg') ||
-        lower.endsWith('.jpeg') ||
-        lower.endsWith('.png');
-  }
-
-  String _extractFileName(String url) {
-    final decodedUrl = Uri.decodeFull(url);
-    return decodedUrl
-        .split('/')
-        .last
-        .split('?')
-        .first;
-  }
-
-  Future<String> _downloadFile(String url, String name) async {
-    final dir = await getTemporaryDirectory();
-    final path = '${dir.path}/$name';
-
-    final response = await Dio().download(url, path);
-    if (response.statusCode == 200) {
-      return path;
-    } else {
-      throw Exception('Failed to download file');
-    }
-  }
-
-
-  Future<String> _downloadFileToDownloads(String url, String name) async {
-    Directory? downloadsDirectory;
-
-    if (Platform.isAndroid) {
-      downloadsDirectory = Directory('/storage/emulated/0/Download');
-    } else if (Platform.isIOS) {
-      downloadsDirectory = await getApplicationDocumentsDirectory();
-    } else {
-      throw Exception('Unsupported platform');
-    }
-
-    final filePath = '${downloadsDirectory.path}/$name';
-
-    final response = await Dio().download(url, filePath);
-    if (response.statusCode == 200) {
-      return filePath;
-    } else {
-      throw Exception('Failed to download file');
-    }
-  }
-
-  Future<void> _downloadAndSaveToDownloads(BuildContext context, String url,
-      String fileName) async {
-    final deviceInfo = DeviceInfoPlugin();
-    PermissionStatus status;
-
-    if (Platform.isAndroid) {
-      final androidInfo = await deviceInfo.androidInfo;
-      if (androidInfo.version.sdkInt >= 30) {
-        status = await Permission.manageExternalStorage.request();
-      } else {
-        status = await Permission.storage.request();
-      }
-    } else {
-      // iOS permission handling (usually not required for saving to documents)
-      status = await Permission.storage.request();
-    }
-
-    if (!status.isGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Storage permission denied')),
-      );
-      return;
-    }
-
-    try {
-      final savedPath = await _downloadFileToDownloads(url, fileName);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('File saved to $savedPath')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Download failed: $e')),
-      );
-    }
-  }
-
-
-  @override
-  Widget build(BuildContext context) {
-    final fileName = _extractFileName(widget.fileUrl);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('File Preview'),
-        backgroundColor: Colors.teal,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.download,color: Colors.white),
-            onPressed: () {
-              _downloadAndSaveToDownloads(context, widget.fileUrl, fileName);
-            },
-          ),
-        ],
-      ),
-      body: FutureBuilder<String>(
-        future: _downloadFile(widget.fileUrl, fileName),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator(color: Colors.teal));
-          } else if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          } else if (snapshot.hasData) {
-            final filePath = snapshot.data!;
-            if (_isPdf(fileName)) {
-              return PDFView(filePath: filePath);
-            } else if (_isImage(fileName)) {
-              return Image.file(File(filePath));
-            } else {
-              return Center(
-                  child: Text('Preview not supported for this file type.'));
-            }
-          }
-          return SizedBox.shrink();
-        },
-      ),
     );
   }
 }
