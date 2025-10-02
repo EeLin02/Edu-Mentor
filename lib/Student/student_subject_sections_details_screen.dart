@@ -28,6 +28,7 @@ class StudentSubjectSectionsDetailsScreen extends StatefulWidget {
 class _StudentSubjectClassDetailsScreenState
     extends State<StudentSubjectSectionsDetailsScreen> {
   String subjectName = '';
+  String subjectCode = '';
   String sectionName = '';
   String mentorId = '';
   String mentorName = '';
@@ -58,6 +59,8 @@ class _StudentSubjectClassDetailsScreenState
 
         if (subjectDoc.exists) {
           final subjectNameFromDb = subjectDoc.data()?['name'] ?? 'Unknown Subject';
+          final subjectCodeFromDb = subjectDoc.data()?['code'] ?? '';
+
 
           final sectionDoc = await FirebaseFirestore.instance
               .collection('schools')
@@ -124,6 +127,7 @@ class _StudentSubjectClassDetailsScreenState
 
             setState(() {
               subjectName = subjectNameFromDb;
+              subjectCode = subjectCodeFromDb;
               sectionName = sectionNameFromDb;
               mentorId = fetchedMentorId;
               mentorName = fetchedMentorName;
@@ -159,7 +163,7 @@ class _StudentSubjectClassDetailsScreenState
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          isLoading ? 'Loading...' : '$subjectName · $sectionName',
+          isLoading ? 'Loading...' : '$subjectName · $subjectCode · $sectionName',
           style: TextStyle(color: textColor),
         ),
         backgroundColor: color,
@@ -311,7 +315,7 @@ class _StudentSubjectClassDetailsScreenState
           children: [
             _infoRow('Subject:', subjectName, textColor, valueColor),
             const SizedBox(height: 10),
-            _infoRow('Class:', sectionName, textColor, valueColor),
+            _infoRow('Section:', sectionName, textColor, valueColor),
           ],
         ),
       ),

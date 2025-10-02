@@ -1119,30 +1119,52 @@ class _QuizSubmissionsScreenState extends State<QuizSubmissionsScreen> {
                   itemCount: filtered.length,
                   itemBuilder: (context, i) {
                     final sub = filtered[i];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundImage: sub["profileUrl"] != null
-                            ? NetworkImage(sub["profileUrl"])
-                            : null,
-                        child: sub["profileUrl"] == null
-                            ? const Icon(Icons.person)
-                            : null,
-                      ),
-                      title: Text(sub["studentName"] ?? "Unknown"),
-                      subtitle: Text(
-                        "Score: ${sub["score"] ?? 0}/${sub["total"] ?? 0} • "
-                            "Submitted: ${sub["submittedAt"].toDate()}",
-                      ),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => SubmissionDetailScreen(
-                              quizTitle: widget.quizTitle,
-                              submissionId: sub.id,
-                              quizId: widget.quizId,
-                            ),
+                    final studentId = sub["studentId"];
+
+                    return FutureBuilder<DocumentSnapshot>(
+                      future: FirebaseFirestore.instance
+                          .collection("students")
+                          .doc(studentId)
+                          .get(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const ListTile(
+                            leading: CircleAvatar(child: Icon(Icons.person)),
+                            title: Text("Loading..."),
+                          );
+                        }
+
+                        final student = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+                        final name = student["name"] ?? "Unknown";
+                        final profileUrl = student["profileUrl"];
+                        final studentIdNo = student["studentIdNo"] ?? "";
+
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundImage: profileUrl != null && profileUrl.isNotEmpty
+                                ? NetworkImage(profileUrl)
+                                : null,
+                            child: (profileUrl == null || profileUrl.isEmpty)
+                                ? const Icon(Icons.person)
+                                : null,
                           ),
+                          title: Text(name),
+                          subtitle: Text(
+                            "ID: $studentIdNo • Score: ${sub["score"] ?? 0}/${sub["total"] ?? 0}\n"
+                                "Submitted: ${sub["submittedAt"].toDate()}",
+                          ),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => SubmissionDetailScreen(
+                                  quizTitle: widget.quizTitle,
+                                  submissionId: sub.id,
+                                  quizId: widget.quizId,
+                                ),
+                              ),
+                            );
+                          },
                         );
                       },
                     );

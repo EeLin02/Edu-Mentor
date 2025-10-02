@@ -28,108 +28,152 @@ class SubmissionDetailScreen extends StatelessWidget {
           if (!submissionSnap.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
+          if (!submissionSnap.data!.exists) {
+            return const Center(child: Text("Submission not found."));
+          }
 
           final submissionData =
           submissionSnap.data!.data() as Map<String, dynamic>;
           final answersMap =
           Map<String, dynamic>.from(submissionData["answers"] ?? {});
+          final studentId = submissionData["studentId"];
 
-          return FutureBuilder<QuerySnapshot>(
+          if (studentId == null) {
+            return const Center(child: Text("Student ID missing in submission."));
+          }
+
+          // 🔹 Now fetch the student profile
+          return FutureBuilder<DocumentSnapshot>(
             future: FirebaseFirestore.instance
-                .collection("quizzes")
-                .doc(quizId)
-                .collection("questions")
-                .orderBy("createdAt")
+                .collection("students")
+                .doc(studentId)
                 .get(),
-            builder: (context, questionSnap) {
-              if (!questionSnap.hasData) {
+            builder: (context, studentSnap) {
+              if (!studentSnap.hasData) {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              final questions = questionSnap.data!.docs;
+              final studentData =
+                  studentSnap.data?.data() as Map<String, dynamic>? ?? {};
 
-              return SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    if (submissionData["profileUrl"] != null)
-                      CircleAvatar(
-                        radius: 40,
-                        backgroundImage: NetworkImage(
-                            submissionData["profileUrl"]),
-                      ),
-                    const SizedBox(height: 8),
-                    Text(
-                      submissionData["studentName"] ?? "Unknown",
-                      style: const TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "Score: ${submissionData["score"]}/${submissionData["total"]}",
-                      style: const TextStyle(
-                          fontSize: 16, color: Colors.blue),
-                    ),
-                    const Divider(height: 32),
+              final studentName = studentData["name"] ?? "Unknown";
+              final studentIdNo = studentData["studentIdNo"] ?? "N/A";
+              final profileUrl = studentData["profileUrl"];
 
-                    // Show each question with student's answer
-                    ...questions.map((q) {
-                      final qId = q.id;
-                      final questionText = q["question"] ?? "Untitled";
-                      final type = q["type"] ?? "multiple_choice";
-                      final correctAnswer = q["correctAnswer"]?.toString() ?? "";
-                      final options = List<String>.from(q["options"] ?? []);
+              return FutureBuilder<QuerySnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection("quizzes")
+                    .doc(quizId)
+                    .collection("questions")
+                    .orderBy("createdAt")
+                    .get(),
+                builder: (context, questionSnap) {
+                  if (!questionSnap.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
 
-// student's raw answer
-                      final studentRawAnswer = answersMap[qId];
+                  final questions = questionSnap.data!.docs;
 
-                      String studentAnswer = "";
-                      if (type == "multiple_choice") {
-                        if (studentRawAnswer is int) {
-                          // single choice
-                          if (studentRawAnswer >= 0 && studentRawAnswer < options.length) {
-                            studentAnswer = options[studentRawAnswer];
-                          }
-                        } else if (studentRawAnswer is List) {
-                          // multiple choice (array of indices)
-                          final selected = studentRawAnswer
-                              .whereType<int>()
-                              .where((i) => i >= 0 && i < options.length)
-                              .map((i) => options[i])
-                              .toList();
-                          studentAnswer = selected.isNotEmpty ? selected.join(", ") : "(No Answer)";
-                        } else {
-                          studentAnswer = "(No Answer)";
-                        }
-                      } else if (type == "fill_blank") {
-                        studentAnswer = studentRawAnswer?.toString() ?? "";
-                      }
-
-                      // use correctness map from Firestore
-                      final correctnessMap =
-                      Map<String, dynamic>.from(submissionData["correctness"] ?? {});
-                      final bool isCorrect = correctnessMap[qId] == true;
-
-                      return Card(
-                        child: ListTile(
-                          title: Text(questionText),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text("Your Answer: $studentAnswer"),
-                              Text("Correct Answer: $correctAnswer"),
-                            ],
-                          ),
-                          trailing: Icon(
-                            isCorrect ? Icons.check_circle : Icons.cancel,
-                            color: isCorrect ? Colors.green : Colors.red,
-                          ),
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 40,
+                          backgroundImage:
+                          profileUrl != null && profileUrl.isNotEmpty
+                              ? NetworkImage(profileUrl)
+                              : null,
+                          child: (profileUrl == null || profileUrl.isEmpty)
+                              ? const Icon(Icons.person, size: 40)
+                              : null,
                         ),
-                      );
+                        const SizedBox(height: 8),
+                        Text(
+                          studentName,
+                          style: const TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        Text("Student ID: $studentIdNo"),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Score: ${submissionData["score"]}/${submissionData["total"]}",
+                          style: const TextStyle(
+                              fontSize: 16, color: Colors.blue),
+                        ),
+                        const Divider(height: 32),
 
-                    }).toList(),
-                  ],
-                ),
+                        // Show each question with student's answer
+                        ...questions.map((q) {
+                          final qId = q.id;
+                          final questionText = q["question"] ?? "Untitled";
+                          final type = q["type"] ?? "multiple_choice";
+                          final correctAnswer =
+                              q["correctAnswer"]?.toString() ?? "";
+                          final options =
+                          List<String>.from(q["options"] ?? []);
+
+                          // student's raw answer
+                          final studentRawAnswer = answersMap[qId];
+
+                          String studentAnswer = "";
+                          if (type == "multiple_choice") {
+                            if (studentRawAnswer is int) {
+                              // single choice
+                              if (studentRawAnswer >= 0 &&
+                                  studentRawAnswer < options.length) {
+                                studentAnswer = options[studentRawAnswer];
+                              }
+                            } else if (studentRawAnswer is List) {
+                              // multiple choice (array of indices)
+                              final selected = studentRawAnswer
+                                  .whereType<int>()
+                                  .where((i) =>
+                              i >= 0 && i < options.length)
+                                  .map((i) => options[i])
+                                  .toList();
+                              studentAnswer = selected.isNotEmpty
+                                  ? selected.join(", ")
+                                  : "(No Answer)";
+                            } else {
+                              studentAnswer = "(No Answer)";
+                            }
+                          } else if (type == "fill_blank") {
+                            studentAnswer =
+                                studentRawAnswer?.toString() ?? "";
+                          }
+
+                          // use correctness map from Firestore
+                          final correctnessMap = Map<String, dynamic>.from(
+                              submissionData["correctness"] ?? {});
+                          final bool isCorrect =
+                              correctnessMap[qId] == true;
+
+                          return Card(
+                            child: ListTile(
+                              title: Text(questionText),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text("Your Answer: $studentAnswer"),
+                                  Text("Correct Answer: $correctAnswer"),
+                                ],
+                              ),
+                              trailing: Icon(
+                                isCorrect
+                                    ? Icons.check_circle
+                                    : Icons.cancel,
+                                color: isCorrect
+                                    ? Colors.green
+                                    : Colors.red,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ],
+                    ),
+                  );
+                },
               );
             },
           );

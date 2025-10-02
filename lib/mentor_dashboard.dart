@@ -585,6 +585,7 @@ class _MentorDashboardState extends State<MentorDashboard> {
                                               schoolId: item['schoolId'],
                                               programmeId: item['programmeId'],
                                               subjectName: item['subjectName'],
+                                              subjectCode: item['subjectCode'],
                                               sectionName: item['sectionName'],
                                               subjectId: item['subjectId'],
                                               sectionId: item['sectionId'],
@@ -978,6 +979,7 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
                                     MaterialPageRoute(
                                       builder: (_) => SubjectSectionDetailsScreen(
                                         subjectName: item['subjectName'],
+                                        subjectCode: item['subjectCode'],
                                         sectionName: item['sectionName'],
                                         programmeId: item['programmeId'],
                                         schoolId: item['schoolId'],

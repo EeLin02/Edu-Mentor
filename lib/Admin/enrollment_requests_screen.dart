@@ -19,54 +19,70 @@ class _EnrollmentRequestsScreenState extends State<EnrollmentRequestsScreen> {
 
     if (type == "drop") {
       // remove enrollment
-      final enrollRef = _firestore.collection("subjectEnrollments").doc("${studentId}_$subjectId");
+      final enrollRef = _firestore
+          .collection("subjectEnrollments")
+          .doc("${studentId}_$subjectId");
       batch.delete(enrollRef);
 
       // decrement section count
-      final sectionId = data["sectionId"];
+      final sectionId = data["currentSectionId"];
       if (sectionId != null) {
         final secRef = _firestore
             .collection("schools").doc(data["schoolId"])
             .collection("programmes").doc(data["programmeId"])
             .collection("subjects").doc(subjectId)
             .collection("sections").doc(sectionId);
-        batch.update(secRef, {"currentCount": FieldValue.increment(-1)});
+        batch.set(secRef, {
+          "currentCount": FieldValue.increment(-1),
+        }, SetOptions(merge: true));
       }
     }
-    else if (type == "exchange") {
-      final enrollRef = _firestore.collection("subjectEnrollments").doc("${studentId}_$subjectId");
 
-      // decrement old
-      final oldSectionId = data["fromSectionId"];
-      if (oldSectionId != null) {
+    else if (type == "exchange") {
+      final enrollRef = _firestore
+          .collection("subjectEnrollments")
+          .doc("${studentId}_$subjectId");
+
+      final oldSectionId = data["currentSectionId"];
+      final newSectionId = data["requestedSectionId"];
+
+      // ✅ decrement old
+      if (oldSectionId != null && oldSectionId != newSectionId) {
         final oldRef = _firestore
             .collection("schools").doc(data["schoolId"])
             .collection("programmes").doc(data["programmeId"])
             .collection("subjects").doc(subjectId)
             .collection("sections").doc(oldSectionId);
-        batch.update(oldRef, {"currentCount": FieldValue.increment(-1)});
+        batch.set(oldRef, {
+          "currentCount": FieldValue.increment(-1),
+        }, SetOptions(merge: true));
       }
 
-      // increment new
-      final newSectionId = data["toSectionId"];
-      if (newSectionId != null) {
+      // ✅ increment new
+      if (newSectionId != null && oldSectionId != newSectionId) {
         final newRef = _firestore
             .collection("schools").doc(data["schoolId"])
             .collection("programmes").doc(data["programmeId"])
             .collection("subjects").doc(subjectId)
             .collection("sections").doc(newSectionId);
-        batch.update(newRef, {"currentCount": FieldValue.increment(1)});
+        batch.set(newRef, {
+          "currentCount": FieldValue.increment(1),
+        }, SetOptions(merge: true));
       }
 
-      // update student's enrollment
+      // update enrollment
       batch.update(enrollRef, {"sectionId": newSectionId});
     }
 
-    // ✅ keep request, mark approved
-    batch.update(reqDoc.reference, {"status": "approved", "processedAt": FieldValue.serverTimestamp()});
+    // mark request as approved
+    batch.update(reqDoc.reference, {
+      "status": "approved",
+      "processedAt": FieldValue.serverTimestamp(),
+    });
 
     await batch.commit();
   }
+
 
 
   Future<void> _rejectRequest(DocumentSnapshot reqDoc) async {

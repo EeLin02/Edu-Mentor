@@ -9,12 +9,15 @@ class SubjectSectionDetailsScreen extends StatelessWidget {
   final String subjectId;
   final String sectionId;
   final String mentorId;
+  final String subjectCode;
+
 
   const SubjectSectionDetailsScreen({
     Key? key,
     required this.schoolId,
     required this.programmeId,
     required this.subjectName,
+    required this.subjectCode,
     required this.sectionName,
     required this.color,
     required this.subjectId,
@@ -33,7 +36,7 @@ class SubjectSectionDetailsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text('$subjectName · $sectionName', style: TextStyle(color: textColor)),
+        title: Text('$subjectName · $subjectCode · $sectionName', style: TextStyle(color: textColor)),
         backgroundColor: color,
         iconTheme: IconThemeData(color: textColor),
         elevation: 4,

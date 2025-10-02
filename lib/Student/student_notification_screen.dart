@@ -23,18 +23,91 @@ class _StudentNotificationScreenState extends State<StudentNotificationScreen> {
   }
 
   Future<void> _loadEnrolledSubjects() async {
-    final user = _auth.currentUser;
-    if (user == null) return;
+    final userId = FirebaseAuth.instance.currentUser!.uid;
 
-    final enrollmentSnap = await _firestore
-        .collection('subjectEnrollments')
-        .where('studentId', isEqualTo: user.uid)
-        .get();
+    try {
+      final enrollmentSnapshot = await FirebaseFirestore.instance
+          .collection('subjectEnrollments')
+          .where('studentId', isEqualTo: userId)
+          .get();
 
-    setState(() {
-      enrolledSubjects = enrollmentSnap.docs.map((doc) => doc.data()).toList();
-      isLoading = false;
-    });
+      List<Map<String, dynamic>> loadedSubjects = [];
+
+      for (var doc in enrollmentSnapshot.docs) {
+        final data = doc.data();
+
+        final subjectId = data['subjectId'];
+        final programmeId = data['programmeId'];
+        final schoolId = data['schoolId'];
+        final sectionId = data['sectionId'];
+
+        // 🔹 Get subject document
+        final subjectDoc = await FirebaseFirestore.instance
+            .collection('schools')
+            .doc(schoolId)
+            .collection('programmes')
+            .doc(programmeId)
+            .collection('subjects')
+            .doc(subjectId)
+            .get();
+
+        // 🔹 Get section document
+        final sectionDoc = await FirebaseFirestore.instance
+            .collection('schools')
+            .doc(schoolId)
+            .collection('programmes')
+            .doc(programmeId)
+            .collection('subjects')
+            .doc(subjectId)
+            .collection('sections')
+            .doc(sectionId)
+            .get();
+
+        // 🔹 Get student customization (color)
+        final customizationQuery = await FirebaseFirestore.instance
+            .collection('studentCustomizations')
+            .where('studentId', isEqualTo: userId)
+            .where('sectionId', isEqualTo: sectionId)
+            .limit(1)
+            .get();
+
+        int? customColor;
+        if (customizationQuery.docs.isNotEmpty) {
+          final customizationData = customizationQuery.docs.first.data();
+          if (customizationData.containsKey('color')) {
+            customColor = customizationData['color'];
+          }
+        }
+
+        if (subjectDoc.exists && sectionDoc.exists) {
+          final subjectData = subjectDoc.data()!;
+          final sectionData = sectionDoc.data()!;
+
+          loadedSubjects.add({
+            'subjectId': subjectId,
+            'sectionId': sectionId,
+            'programmeId': programmeId,
+            'schoolId': schoolId,
+
+            ...sectionData,
+            ...data,
+
+            'subjectName': subjectData['name'] ?? '',
+            'subjectCode': subjectData['code'] ?? '',
+
+            // ✅ attach color if found
+            'color': customColor,
+          });
+        }
+      }
+
+      setState(() {
+        enrolledSubjects = loadedSubjects;
+        isLoading = false;
+      });
+    } catch (e) {
+      print("Error loading subjects: $e");
+    }
   }
 
   String _formatDate(Timestamp ts) {
@@ -106,12 +179,33 @@ class _StudentNotificationScreenState extends State<StudentNotificationScreen> {
                 itemBuilder: (context, index) {
                   final data = docs[index].data() as Map<String, dynamic>;
 
+                  // 🔹 Find the enrolled subject details for this announcement
+                  final subjectInfo = enrolledSubjects.firstWhere(
+                        (enroll) =>
+                    enroll['subjectId'] == data['subjectId'] &&
+                        enroll['sectionId'] == data['sectionId'],
+                    orElse: () => {},
+                  );
+
                   return ListTile(
-                    leading: const Icon(Icons.campaign, color: Colors.redAccent),
-                    title: Text(
-                      "${data['subjectName'] ?? ''}.${data['sectionName'] ?? ''}",
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    leading: Icon(
+                      Icons.campaign,
+                      color: subjectInfo['color'] != null
+                          ? Color(subjectInfo['color'] as int)
+                          : Colors.redAccent,
                     ),
+                    title: Text(
+                      "${subjectInfo['subjectName'] ?? ''} "
+                          ".${subjectInfo['subjectCode'] ?? ''} "
+                          ".${subjectInfo['sectionName'] ?? ''}",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: subjectInfo['color'] != null
+                            ? Color(subjectInfo['color'] as int)
+                            : Colors.blue,
+                      ),
+                    ),
+
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -130,8 +224,9 @@ class _StudentNotificationScreenState extends State<StudentNotificationScreen> {
                         arguments: {
                           'docid': docs[index].id,
                           'data': data,
-                          'color': Colors.blue, // can be subject color later
-                        },
+                          'color': subjectInfo['color'] != null
+                              ? Color(subjectInfo['color'] as int)
+                              : Colors.blue,                        },
                       );
                     },
                   );
