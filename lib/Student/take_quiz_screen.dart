@@ -207,12 +207,7 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
         .collection("students")
         .doc(widget.studentId)
         .get();
-    final studentData =
-        studentDoc.data() as Map<String, dynamic>? ?? {};
 
-    String studentName = studentData["name"] ?? "Unknown";
-    String studentProfileUrl = studentData["profileUrl"] ?? "";
-    String studentIdNo = studentData["studentIdNo"] ?? widget.studentId;
 
     // Save submission
     await FirebaseFirestore.instance
@@ -227,9 +222,6 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
       "correctness": correctness, // 🔹 Save correctness map
       "submittedAt": FieldValue.serverTimestamp(),
       "studentId": widget.studentId,
-      "studentIdNo": studentIdNo,
-      "studentName": studentName,
-      "studentProfileUrl": studentProfileUrl,
     }, SetOptions(merge: true));
   }
 

@@ -413,7 +413,7 @@ class _AdminEditProfileScreenState extends State<AdminEditProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Edit Profile"),
+        title: Text("Edit Profile",style: TextStyle(color: Colors.white),),
         backgroundColor: Colors.deepPurple,
       ),
       body: SingleChildScrollView(

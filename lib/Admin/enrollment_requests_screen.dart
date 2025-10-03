@@ -104,7 +104,7 @@ class _EnrollmentRequestsScreenState extends State<EnrollmentRequestsScreen> {
     return studentId;
   }
 
-  Future<String> _getSubjectName(String? schoolId, String? programmeId, String? subjectId) async {
+  Future<String> _getSubjectDisplay(String? schoolId, String? programmeId, String? subjectId) async {
     if (schoolId == null || programmeId == null || subjectId == null) return "Unknown subject";
     final snap = await _firestore
         .collection("schools")
@@ -114,8 +114,12 @@ class _EnrollmentRequestsScreenState extends State<EnrollmentRequestsScreen> {
         .collection("subjects")
         .doc(subjectId)
         .get();
+
     if (snap.exists) {
-      return snap.data()?["name"] as String? ?? subjectId;
+      final data = snap.data()!;
+      final code = data["code"] as String? ?? "";
+      final name = data["name"] as String? ?? subjectId;
+      return code.isNotEmpty ? "$code - $name" : name;
     }
     return subjectId;
   }
@@ -169,7 +173,7 @@ class _EnrollmentRequestsScreenState extends State<EnrollmentRequestsScreen> {
               return FutureBuilder<List<String>>(
                 future: Future.wait([
                   _getStudentDisplay(data["studentId"] as String?),
-                  _getSubjectName(
+                  _getSubjectDisplay(
                     data["schoolId"] as String?,
                     data["programmeId"] as String?,
                     data["subjectId"] as String?,

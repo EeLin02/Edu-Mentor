@@ -1,11 +1,11 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:video_thumbnail/video_thumbnail.dart';
 import 'notice_comment_screen.dart';
 import '../file_preview_screen.dart';
+import 'package:video_player/video_player.dart';
+
 
 class NoticeScreen extends StatelessWidget {
   @override
@@ -116,41 +116,9 @@ class NoticeScreen extends StatelessWidget {
 
                                           // VIDEO
                                           else if (lowerUrl.endsWith('.mp4') || lowerUrl.endsWith('.mov')) {
-                                            return FutureBuilder<Uint8List?>(
-                                              future: VideoThumbnail.thumbnailData(
-                                                video: fileUrl,
-                                                imageFormat: ImageFormat.PNG,
-                                                maxWidth: 400,
-                                                quality: 75,
-                                              ),
-                                              builder: (context, snapshot) {
-                                                if (snapshot.connectionState == ConnectionState.waiting) {
-                                                  return Container(
-                                                    color: Colors.black26,
-                                                    child: const Center(child: CircularProgressIndicator()),
-                                                  );
-                                                }
-                                                if (snapshot.hasData) {
-                                                  return Stack(
-                                                    fit: StackFit.expand,
-                                                    children: [
-                                                      Image.memory(snapshot.data!, fit: BoxFit.cover),
-                                                      const Center(
-                                                        child: Icon(Icons.play_circle_fill,
-                                                            size: 70, color: Colors.white),
-                                                      ),
-                                                    ],
-                                                  );
-                                                }
-                                                return Container(
-                                                  color: Colors.black26,
-                                                  child: const Center(
-                                                    child: Icon(Icons.videocam, size: 60, color: Colors.grey),
-                                                  ),
-                                                );
-                                              },
-                                            );
+                                            return VideoPreviewWidget(fileUrl: fileUrl);
                                           }
+
 
                                           // WORD
                                           else if (lowerUrl.endsWith('.doc') || lowerUrl.endsWith('.docx')) {
@@ -468,6 +436,85 @@ class _LatestCommentsWidgetState extends State<LatestCommentsWidget> {
           }).toList(),
         );
       },
+    );
+  }
+}
+
+//------------video preview--------------
+
+class VideoPreviewWidget extends StatefulWidget {
+  final String fileUrl;
+
+  const VideoPreviewWidget({Key? key, required this.fileUrl}) : super(key: key);
+
+  @override
+  _VideoPreviewWidgetState createState() => _VideoPreviewWidgetState();
+}
+
+class _VideoPreviewWidgetState extends State<VideoPreviewWidget> {
+  late VideoPlayerController _controller;
+  bool _isPlaying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.network(widget.fileUrl)
+      ..initialize().then((_) {
+        setState(() {});
+      })
+      ..setLooping(true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _togglePlayPause() {
+    setState(() {
+      if (_controller.value.isPlaying) {
+        _controller.pause();
+        _isPlaying = false;
+      } else {
+        _controller.play();
+        _isPlaying = true;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _controller.value.isInitialized
+        ? Stack(
+      alignment: Alignment.center,
+      children: [
+        AspectRatio(
+          aspectRatio: _controller.value.aspectRatio,
+          child: VideoPlayer(_controller),
+        ),
+        if (!_isPlaying)
+          IconButton(
+            icon: Icon(Icons.play_circle_fill,
+                size: 64, color: Colors.white.withOpacity(0.8)),
+            onPressed: _togglePlayPause,
+          ),
+        if (_isPlaying)
+          Positioned(
+            bottom: 8,
+            right: 8,
+            child: IconButton(
+              icon: Icon(Icons.pause_circle_filled,
+                  size: 40, color: Colors.white.withOpacity(0.8)),
+              onPressed: _togglePlayPause,
+            ),
+          ),
+      ],
+    )
+        : Container(
+      color: Colors.black26,
+      height: 200,
+      child: const Center(child: CircularProgressIndicator()),
     );
   }
 }

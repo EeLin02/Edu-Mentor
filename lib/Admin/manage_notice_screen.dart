@@ -379,6 +379,7 @@ class VideoPreview extends StatefulWidget {
 
 class _VideoPreviewState extends State<VideoPreview> {
   late VideoPlayerController _controller;
+  bool _isPlaying = false;
 
   @override
   void initState() {
@@ -387,8 +388,7 @@ class _VideoPreviewState extends State<VideoPreview> {
       ..initialize().then((_) {
         setState(() {});
       })
-      ..setLooping(true)
-      ..play();
+      ..setLooping(true);
   }
 
   @override
@@ -397,13 +397,50 @@ class _VideoPreviewState extends State<VideoPreview> {
     super.dispose();
   }
 
+  void _togglePlayPause() {
+    setState(() {
+      if (_controller.value.isPlaying) {
+        _controller.pause();
+        _isPlaying = false;
+      } else {
+        _controller.play();
+        _isPlaying = true;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return _controller.value.isInitialized
-        ? AspectRatio(
-      aspectRatio: _controller.value.aspectRatio,
-      child: VideoPlayer(_controller),
+        ? Stack(
+      alignment: Alignment.center,
+      children: [
+        AspectRatio(
+          aspectRatio: _controller.value.aspectRatio,
+          child: VideoPlayer(_controller),
+        ),
+        if (!_isPlaying)
+          IconButton(
+            icon: Icon(Icons.play_circle_fill,
+                size: 64, color: Colors.white.withOpacity(0.8)),
+            onPressed: _togglePlayPause,
+          ),
+        if (_isPlaying)
+          Positioned(
+            bottom: 8,
+            right: 8,
+            child: IconButton(
+              icon: Icon(Icons.pause_circle_filled,
+                  size: 40, color: Colors.white.withOpacity(0.8)),
+              onPressed: _togglePlayPause,
+            ),
+          ),
+      ],
     )
-        : Center(child: CircularProgressIndicator());
+        : Container(
+      height: 200,
+      child: Center(child: CircularProgressIndicator()),
+    );
   }
 }
+

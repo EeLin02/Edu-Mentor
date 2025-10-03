@@ -338,8 +338,9 @@ class _EditNoticeScreenState extends State<EditNoticeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Edit Notice'),
+        title: Text('Edit Notice',style: TextStyle(color: Colors.white),),
         backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
