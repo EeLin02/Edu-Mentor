@@ -723,8 +723,10 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
         "question": q['question'],
         "type": q['type'],
         "allowMultiple": q['allowMultiple'],
-        "options": q['options'],
-        "correctAnswer": q['correctAnswer'],
+        "options": (q['options'] as List).map((e) => e.toString()).toList(),
+        "correctAnswer": (q['correctAnswer'] is List)
+            ? (q['correctAnswer'] as List).map((e) => e.toString()).toList()
+            : [q['correctAnswer'].toString()],
         "createdAt": FieldValue.serverTimestamp(),
       });
     }
@@ -867,8 +869,19 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
                                   "question": d["question"],
                                   "type": d["type"],
                                   "allowMultiple": d["allowMultiple"],
-                                  "options": List<String>.from(d["options"] ?? []),
-                                  "correctAnswer": d["correctAnswer"],
+                                  "options": (d["options"] as List<dynamic>? ?? [])
+                                      .map((e) => e.toString())
+                                      .toList(),
+                                  "correctAnswer": (() {
+                                    final ca = d["correctAnswer"];
+                                    if (ca is List) {
+                                      return ca.map((e) => e.toString()).toList();
+                                    } else if (ca != null) {
+                                      return [ca.toString()];
+                                    } else {
+                                      return <String>[];
+                                    }
+                                  })(),
                                 }));
                               });
 
@@ -1010,6 +1023,7 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
   }
 }
 
+
 class QuizSubmissionsScreen extends StatefulWidget {
   final String quizId;
   final String quizTitle;
@@ -1051,49 +1065,30 @@ class _QuizSubmissionsScreenState extends State<QuizSubmissionsScreen> {
 
           // 📊 Calculate summary
           final scores = submissions.map((s) => (s["score"] ?? 0) as int).toList();
-          final totals = submissions.map((s) => (s["total"] ?? 0) as int).toList();
           final highest = scores.isNotEmpty ? scores.reduce((a, b) => a > b ? a : b) : 0;
           final lowest = scores.isNotEmpty ? scores.reduce((a, b) => a < b ? a : b) : 0;
-          final average = scores.isNotEmpty ? scores.reduce((a, b) => a + b) / scores.length : 0;
-
-          // ✅ Apply search filter
-          final filtered = submissions.where((s) {
-            final name = (s["studentName"] ?? "").toString().toLowerCase();
-            return name.contains(_searchQuery.toLowerCase());
-          }).toList();
+          final average = scores.isNotEmpty
+              ? scores.reduce((a, b) => a + b) / scores.length
+              : 0.0;
 
           return Column(
             children: [
-              // --- Summary ---
-              // --- Summary ---
-              InkWell(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => QuizStatsDetailScreen(
-                        quizId: widget.quizId,
-                        quizTitle: widget.quizTitle,
-                      ),
-                    ),
-                  );
-                },
-                child: Card(
-                  margin: const EdgeInsets.all(12),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text("📊 Quiz Summary",
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                        Text("👥 Participants: ${submissions.length}"),
-                        Text("🏆 Highest Score: $highest"),
-                        Text("📉 Lowest Score: $lowest"),
-                        Text("📊 Average Score: ${average.toStringAsFixed(2)}"),
-                      ],
-                    ),
+              // --- Summary Card ---
+              Card(
+                margin: const EdgeInsets.all(12),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("📊 Quiz Summary",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Text("👥 Participants: ${submissions.length}"),
+                      Text("🏆 Highest Score: $highest"),
+                      Text("📉 Lowest Score: $lowest"),
+                      Text("📊 Average Score: ${average.toStringAsFixed(2)}"),
+                    ],
                   ),
                 ),
               ),
@@ -1108,7 +1103,7 @@ class _QuizSubmissionsScreenState extends State<QuizSubmissionsScreen> {
                     border: OutlineInputBorder(),
                   ),
                   onChanged: (val) {
-                    setState(() => _searchQuery = val);
+                    setState(() => _searchQuery = val.trim().toLowerCase());
                   },
                 ),
               ),
@@ -1116,9 +1111,9 @@ class _QuizSubmissionsScreenState extends State<QuizSubmissionsScreen> {
               // --- List of submissions ---
               Expanded(
                 child: ListView.builder(
-                  itemCount: filtered.length,
+                  itemCount: submissions.length,
                   itemBuilder: (context, i) {
-                    final sub = filtered[i];
+                    final sub = submissions[i];
                     final studentId = sub["studentId"];
 
                     return FutureBuilder<DocumentSnapshot>(
@@ -1130,14 +1125,27 @@ class _QuizSubmissionsScreenState extends State<QuizSubmissionsScreen> {
                         if (!snapshot.hasData) {
                           return const ListTile(
                             leading: CircleAvatar(child: Icon(Icons.person)),
-                            title: Text("Loading..."),
+                            title: Text("Loading student..."),
                           );
                         }
 
-                        final student = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+                        if (!snapshot.data!.exists) {
+                          return const ListTile(
+                            leading: CircleAvatar(child: Icon(Icons.error)),
+                            title: Text("Student not found"),
+                          );
+                        }
+
+                        final student = snapshot.data!.data() as Map<String, dynamic>;
                         final name = student["name"] ?? "Unknown";
                         final profileUrl = student["profileUrl"];
                         final studentIdNo = student["studentIdNo"] ?? "";
+
+                        // 🔹 Filter based on search
+                        if (_searchQuery.isNotEmpty &&
+                            !name.toLowerCase().contains(_searchQuery)) {
+                          return const SizedBox.shrink();
+                        }
 
                         return ListTile(
                           leading: CircleAvatar(
@@ -1178,6 +1186,7 @@ class _QuizSubmissionsScreenState extends State<QuizSubmissionsScreen> {
     );
   }
 }
+
 
 class QuizStatsDetailScreen extends StatefulWidget {
   final String quizId;

@@ -61,13 +61,8 @@ class _CreateForumPostScreenState extends State<CreateForumPostScreen> {
         .doc(uid)
         .get();
 
-    final userName = userDoc['name'];
-    final userPhoto = userDoc['fileUrl']; // Optional: check if it exists
-
     await FirebaseFirestore.instance.collection('forums').add({
       'userId': uid,
-      'userName': userName,
-      'userPhoto': userPhoto,
       'text': text,
       'timestamp': FieldValue.serverTimestamp(),
     });

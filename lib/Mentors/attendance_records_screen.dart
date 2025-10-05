@@ -76,8 +76,8 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
 
     final attendanceRef = FirebaseFirestore.instance
         .collection('attendance')
-        .doc(widget.sectionId)
-        .collection(widget.subjectId);
+        .doc(widget.subjectId)
+        .collection(widget.sectionId);
 
     return Scaffold(
       appBar: AppBar(
@@ -176,9 +176,10 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                       data = doc.data() as Map<String, dynamic>;
                     } catch (_) {}
 
-                    final presentCount = data.values.where((v) => v == true).length;
+                    final presentCount = data.values.where((v) => v == "P").length;
                     final mcCount = data.values.where((v) => v == "MC").length;
-                    final absentCount = data.length - presentCount - mcCount;
+                    final absentCount = data.values.where((v) => v == "A").length;
+
 
                     return Card(
                       margin:
@@ -225,8 +226,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(content: Text("Record deleted.")),
                                 );
-                                // Return true to TakeAttendanceScreen so it can refresh
-                                Navigator.pop(context, true);
+
                               } catch (e) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(content: Text("Failed to delete: $e")),

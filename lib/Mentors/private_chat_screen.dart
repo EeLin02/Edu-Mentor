@@ -95,20 +95,18 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
       .doc(chatId)
       .collection('messages');
 
-  Future<void> _checkMuteStatus(String chatId) async {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-
+  Future<bool> _checkMuteStatus(String chatId) async {
     final doc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('mutedChats')
+        .collection('privateChats')
         .doc(chatId)
         .get();
 
-    setState(() {
-      _isMuted = doc.exists;
-    });
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    final mutedBy = List<String>.from(data['mutedBy'] ?? []);
+    return mutedBy.contains(FirebaseAuth.instance.currentUser!.uid);
   }
+
+
 
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
@@ -499,28 +497,28 @@ void _requestPermission() async {
 
 
   Future<void> _toggleMuteNotifications(String chatId) async {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final docRef = FirebaseFirestore.instance.collection('privateChats').doc(chatId);
+    final doc = await docRef.get();
 
-    final docRef = FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('mutedChats')
-        .doc(chatId);
+    final userId = FirebaseAuth.instance.currentUser!.uid;
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    final mutedBy = List<String>.from(data['mutedBy'] ?? []);
 
-    if (_isMuted) {
-      // Unmute (remove entry)
-      await docRef.delete();
-    } else {
-      // Mute (add entry)
+    if (mutedBy.contains(userId)) {
+      // Unmute
       await docRef.set({
-        'mutedAt': FieldValue.serverTimestamp(),
-      });
+        'mutedBy': FieldValue.arrayRemove([userId]),
+      }, SetOptions(merge: true));
+    } else {
+      // Mute
+      await docRef.set({
+        'mutedBy': FieldValue.arrayUnion([userId]),
+      }, SetOptions(merge: true));
     }
-
-    setState(() {
-      _isMuted = !_isMuted;
-    });
   }
+
+
+
 
   Future<void> _clearChatHistory() async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
@@ -627,15 +625,29 @@ void _requestPermission() async {
             ),
           ),
           actions: [
-            IconButton(
-              icon: Icon(
-                _isMuted ? Icons.notifications_off : Icons.notifications,
-                color: Colors.white,
-              ),
-              tooltip: _isMuted ? 'Unmute Notifications' : 'Mute Notifications',
-              onPressed: () => _toggleMuteNotifications(chatId),
-              // same toggle function
+            StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('privateChats')
+                  .doc(chatId)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                final data = snapshot.data?.data() as Map<String, dynamic>? ?? {};
+                final mutedBy = List<String>.from(data['mutedBy'] ?? []);
+                final isMuted = mutedBy.contains(FirebaseAuth.instance.currentUser!.uid);
+
+                return IconButton(
+                  icon: Icon(
+                    isMuted ? Icons.notifications_off : Icons.notifications,
+                    color: Colors.white,
+                  ),
+                  tooltip: isMuted ? 'Unmute Notifications' : 'Mute Notifications',
+                  onPressed: () => _toggleMuteNotifications(chatId),
+                );
+              },
+
             ),
+
+
             PopupMenuButton<String>(
               icon: Icon(Icons.more_vert, color: Colors.white),
               onSelected: _handleMenuAction,

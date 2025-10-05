@@ -133,8 +133,6 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
           .doc(sectionId)
           .get();
 
-      final subjectName = subjectDoc.data()?['name'] ?? 'Unknown Subject';
-      final sectionName = sectionDoc.data()?['name'] ?? 'Unknown Section';
 
       // save student enrollment with names
       final docRef = _firestore
@@ -147,8 +145,6 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
         "programmeId": programmeId,
         "subjectId": subjectId,
         "sectionId": sectionId,
-        "subjectName": subjectName,
-        "sectionName": sectionName,
         "createdAt": FieldValue.serverTimestamp(),
       });
 
@@ -369,29 +365,31 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
       );
     }
 
-    return FutureBuilder<DocumentSnapshot>(
-      future: _firestore
+    // ✅ Always listen for subject updates
+    return StreamBuilder<DocumentSnapshot>(
+      stream: _firestore
           .collection("schools")
           .doc(schoolId!)
           .collection("programmes")
           .doc(programmeId!)
           .collection("subjects")
           .doc(subjectId)
-          .get(),
+          .snapshots(),
       builder: (context, subjSnap) {
-        if (subjSnap.connectionState == ConnectionState.waiting) {
+        if (!subjSnap.hasData) {
           return Card(child: ListTile(title: Text("Loading subject...")));
         }
-        if (!subjSnap.hasData || !subjSnap.data!.exists) {
+        if (!subjSnap.data!.exists) {
           return Card(child: ListTile(title: Text("Unknown Subject ($subjectId)")));
         }
 
-        final subjData = subjSnap.data!.data() as Map<String, dynamic>?;
-        final subjectName = subjData?["name"] ?? "Unnamed Subject";
-        final subjectCode = subjData?["code"] ?? "";
+        final subjData = subjSnap.data!.data() as Map<String, dynamic>;
+        final subjectName = subjData["name"] ?? "Unnamed Subject";
+        final subjectCode = subjData["code"] ?? "";
 
-        return FutureBuilder<DocumentSnapshot>(
-          future: _firestore
+        // ✅ Always listen for section updates
+        return StreamBuilder<DocumentSnapshot>(
+          stream: _firestore
               .collection("schools")
               .doc(schoolId!)
               .collection("programmes")
@@ -400,9 +398,9 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
               .doc(subjectId)
               .collection("sections")
               .doc(sectionId)
-              .get(),
+              .snapshots(),
           builder: (context, secSnap) {
-            if (secSnap.connectionState == ConnectionState.waiting) {
+            if (!secSnap.hasData) {
               return Card(
                 child: ListTile(
                   title: Text("$subjectName ($subjectCode)"),
@@ -410,7 +408,7 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
                 ),
               );
             }
-            if (!secSnap.hasData || !secSnap.data!.exists) {
+            if (!secSnap.data!.exists) {
               return Card(
                 child: ListTile(
                   title: Text("$subjectName ($subjectCode)"),
@@ -419,10 +417,10 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
               );
             }
 
-            final secData = secSnap.data!.data() as Map<String, dynamic>?;
-            final sectionName = secData?["name"] ?? sectionId;
+            final secData = secSnap.data!.data() as Map<String, dynamic>;
+            final sectionName = secData["name"] ?? sectionId;
 
-
+            // ✅ Still listen for pending requests
             return StreamBuilder<DocumentSnapshot?>(
               stream: _getPendingRequest(subjectId, sectionId),
               builder: (context, reqSnap) {
@@ -440,7 +438,6 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
                       onSelected: (value) async {
                         if (value == "drop") {
                           if (pendingDoc != null) {
-                            // 🔄 Update existing request to "drop"
                             await pendingDoc.reference.update({
                               "requestedSectionId": null,
                               "type": "drop",
@@ -493,7 +490,6 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
       },
     );
   }
-
 
   Future<void> _sendDropRequest(String subjectId, String? sectionId) async {
     await _firestore.collection("enrollmentRequests").add({

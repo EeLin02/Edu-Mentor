@@ -236,6 +236,8 @@ class _StudentSubjectClassDetailsScreenState
               textColor: textColor,
               onTap: () {
                 Navigator.pushNamed(context, '/studentShareResources', arguments: {
+                  'subjectId': widget.subjectId,
+                  'sectionId': widget.sectionId,
                   'subjectName': subjectName,
                   'sectionName': sectionName,
                   'color': color,

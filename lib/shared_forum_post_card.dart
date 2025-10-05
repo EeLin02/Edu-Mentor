@@ -11,13 +11,19 @@ class ForumPostCard extends StatelessWidget {
   final Color themeColor;
   final bool showDelete;
 
+  final String userName;
+  final String userPhoto;
+  final String userIdNo;
+
   ForumPostCard({
     required this.data,
     required this.currentUser,
     this.themeColor = Colors.teal,
     this.showDelete = false,
+    required this.userName,
+    required this.userPhoto,
+    required this.userIdNo,
   });
-
 
   void _toggleLike(String postId, List likes) async {
     final userId = currentUser!.uid;
@@ -65,8 +71,11 @@ class ForumPostCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ListTile(
-              leading: CircleAvatar(backgroundImage: NetworkImage(data['userPhoto'])),
-              title: Text(data['userName']),
+              leading: CircleAvatar(
+                backgroundImage: userPhoto.isNotEmpty ? NetworkImage(userPhoto) : null,
+                child: userPhoto.isEmpty ? Icon(Icons.person) : null,
+              ),
+              title: Text('$userName ($userIdNo)'),
               subtitle: Text(data['text'], style: TextStyle(fontSize: 15)),
               trailing: showDelete
                   ? PopupMenuButton<String>(
@@ -96,8 +105,7 @@ class ForumPostCard extends StatelessWidget {
               alignment: Alignment.centerRight,
               child: Text(
                 data['timestamp'] != null
-                    ? DateFormat('EEEE, MMM d, yyyy at h:mm a')
-                    .format(data['timestamp'].toDate())
+                    ? DateFormat('EEEE, MMM d, yyyy at h:mm a').format(data['timestamp'].toDate())
                     : 'Just now',
                 style: TextStyle(color: Colors.grey, fontSize: 12),
               ),

@@ -158,8 +158,8 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
       final dateStr = selectedDate.toIso8601String().split('T')[0];
       final attendanceDoc = await _firestore
           .collection('attendance')
-          .doc(widget.sectionId)
-          .collection(widget.subjectId)
+          .doc(widget.subjectId)
+          .collection(widget.sectionId)
           .doc(dateStr)
           .get();
 
@@ -170,12 +170,9 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
         _filteredStudents = students;
         _attendance = {
           for (var s in students)
-            s['id']: data[s['id']] == true
-                ? 'P'
-                : data[s['id']] == 'MC'
-                ? 'MC'
-                : 'A'
+            s['id']: (data[s['id']] ?? 'A') as String  // default to Absent
         };
+
         _alreadySaved = attendanceDoc.exists && !_isEditMode;
         _loading = false;
       });
@@ -199,17 +196,12 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
     final dateStr = selectedDate.toIso8601String().split('T')[0];
     final docRef = _firestore
         .collection('attendance')
-        .doc(widget.sectionId)
-        .collection(widget.subjectId)
+        .doc(widget.subjectId)
+        .collection(widget.sectionId)
         .doc(dateStr);
 
     final data = {
-      for (var entry in _attendance.entries)
-        entry.key: entry.value == 'P'
-            ? true
-            : entry.value == 'MC'
-            ? 'MC'
-            : false
+      for (var entry in _attendance.entries) entry.key: entry.value,
     };
 
     await docRef.set(data);
@@ -224,6 +216,7 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
       });
     }
   }
+
 
   void _filterStudents(String query) {
     setState(() {

@@ -46,8 +46,6 @@ class _StudentResourceScreenState extends State<StudentResourceScreen> {
         'studentId': currentUser!.uid,
         'resourceId': resourceId,
         'title': resourceData['title'] ?? '',
-        'subjectName': resourceData['subjectName'] ?? '',
-        'sectionName': resourceData['sectionName'] ?? '',
         'timestamp': FieldValue.serverTimestamp(),
       });
     }
@@ -70,7 +68,9 @@ class _StudentResourceScreenState extends State<StudentResourceScreen> {
   @override
   Widget build(BuildContext context) {
     final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-    final String subjectName = args['subjectName'];
+    final String? subjectId = args['subjectId'] as String?;
+    final String? sectionId = args['sectionId'] as String?;
+    final String subjectName = args['subjectName']; // still use for UI title
     final String sectionName = args['sectionName'];
     final Color color = args['color'] ?? Colors.indigo;
 
@@ -79,23 +79,33 @@ class _StudentResourceScreenState extends State<StudentResourceScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Resources · $subjectName - $sectionName',
-            style: TextStyle(color: textColor)),
+        title: Text(
+          'Resources · $subjectName - $sectionName',
+          style: TextStyle(color: textColor),
+        ),
         backgroundColor: color,
         foregroundColor: textColor,
       ),
-      body: StreamBuilder<QuerySnapshot>(
+      body: (subjectId == null || sectionId == null)
+          ? const Center(child: Text("Invalid subject or section."))
+          : StreamBuilder<QuerySnapshot>(
         stream: _resourcesCollection
-            .where('subjectName', isEqualTo: subjectName)
-            .where('sectionName', isEqualTo: sectionName)
+            .where('subjectId', isEqualTo: subjectId)   // ✅ safe now
+            .where('sectionId', isEqualTo: sectionId)   // ✅ safe now
             .orderBy('category')
             .snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.hasError) return const Center(child: Text('Error loading resources'));
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          if (snapshot.hasError) {
+            return const Center(child: Text('Error loading resources'));
+          }
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
           final docs = snapshot.data!.docs;
-          if (docs.isEmpty) return const Center(child: Text('No resources available.'));
+          if (docs.isEmpty) {
+            return const Center(child: Text('No resources available.'));
+          }
 
           // Group resources by category
           final Map<String, List<QueryDocumentSnapshot>> grouped = {};

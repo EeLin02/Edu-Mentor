@@ -25,10 +25,10 @@ class SubmissionDetailScreen extends StatelessWidget {
             .doc(submissionId)
             .get(),
         builder: (context, submissionSnap) {
-          if (!submissionSnap.hasData) {
+          if (submissionSnap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (!submissionSnap.data!.exists) {
+          if (!submissionSnap.hasData || !submissionSnap.data!.exists) {
             return const Center(child: Text("Submission not found."));
           }
 
@@ -36,26 +36,26 @@ class SubmissionDetailScreen extends StatelessWidget {
           submissionSnap.data!.data() as Map<String, dynamic>;
           final answersMap =
           Map<String, dynamic>.from(submissionData["answers"] ?? {});
+          final correctnessMap =
+          Map<String, dynamic>.from(submissionData["correctness"] ?? {});
           final studentId = submissionData["studentId"];
 
           if (studentId == null) {
             return const Center(child: Text("Student ID missing in submission."));
           }
 
-          // 🔹 Now fetch the student profile
           return FutureBuilder<DocumentSnapshot>(
             future: FirebaseFirestore.instance
                 .collection("students")
                 .doc(studentId)
                 .get(),
             builder: (context, studentSnap) {
-              if (!studentSnap.hasData) {
+              if (studentSnap.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
 
               final studentData =
                   studentSnap.data?.data() as Map<String, dynamic>? ?? {};
-
               final studentName = studentData["name"] ?? "Unknown";
               final studentIdNo = studentData["studentIdNo"] ?? "N/A";
               final profileUrl = studentData["profileUrl"];
@@ -65,23 +65,24 @@ class SubmissionDetailScreen extends StatelessWidget {
                     .collection("quizzes")
                     .doc(quizId)
                     .collection("questions")
-                    .orderBy("createdAt")
+                    .orderBy("createdAt", descending: false)
                     .get(),
                 builder: (context, questionSnap) {
-                  if (!questionSnap.hasData) {
+                  if (questionSnap.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
 
-                  final questions = questionSnap.data!.docs;
+                  final questions = questionSnap.data?.docs ?? [];
 
                   return SingleChildScrollView(
                     padding: const EdgeInsets.all(16),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
+                        // 🧑‍🎓 Student Info Header
                         CircleAvatar(
                           radius: 40,
-                          backgroundImage:
-                          profileUrl != null && profileUrl.isNotEmpty
+                          backgroundImage: (profileUrl != null && profileUrl.isNotEmpty)
                               ? NetworkImage(profileUrl)
                               : null,
                           child: (profileUrl == null || profileUrl.isEmpty)
@@ -95,77 +96,100 @@ class SubmissionDetailScreen extends StatelessWidget {
                               fontSize: 20, fontWeight: FontWeight.bold),
                         ),
                         Text("Student ID: $studentIdNo"),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         Text(
-                          "Score: ${submissionData["score"]}/${submissionData["total"]}",
+                          "Score: ${submissionData["score"] ?? 0}/${submissionData["total"] ?? questions.length}",
                           style: const TextStyle(
-                              fontSize: 16, color: Colors.blue),
+                            fontSize: 16,
+                            color: Colors.blueAccent,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                        const Divider(height: 32),
+                        const Divider(height: 32, thickness: 1),
 
-                        // Show each question with student's answer
-                        ...questions.map((q) {
+                        // 🧩 Questions List
+                        ...questions.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final q = entry.value;
                           final qId = q.id;
-                          final questionText = q["question"] ?? "Untitled";
+
+                          final questionText = q["question"] ?? "Untitled question";
                           final type = q["type"] ?? "multiple_choice";
-                          final correctAnswer =
-                              q["correctAnswer"]?.toString() ?? "";
-                          final options =
-                          List<String>.from(q["options"] ?? []);
+                          final options = List<String>.from(q["options"] ?? []);
+                          final correctAnswerRaw = q["correctAnswer"];
 
-                          // student's raw answer
-                          final studentRawAnswer = answersMap[qId];
-
-                          String studentAnswer = "";
-                          if (type == "multiple_choice") {
-                            if (studentRawAnswer is int) {
-                              // single choice
-                              if (studentRawAnswer >= 0 &&
-                                  studentRawAnswer < options.length) {
-                                studentAnswer = options[studentRawAnswer];
+                          // Handle correct answer(s)
+                          String correctAnswerDisplay = "";
+                          if (correctAnswerRaw is List) {
+                            // Multiple correct answers (indices or text)
+                            final list = correctAnswerRaw.map((a) {
+                              if (a is int && a >= 0 && a < options.length) {
+                                return options[a];
                               }
-                            } else if (studentRawAnswer is List) {
-                              // multiple choice (array of indices)
-                              final selected = studentRawAnswer
-                                  .whereType<int>()
-                                  .where((i) =>
-                              i >= 0 && i < options.length)
-                                  .map((i) => options[i])
-                                  .toList();
-                              studentAnswer = selected.isNotEmpty
-                                  ? selected.join(", ")
-                                  : "(No Answer)";
-                            } else {
-                              studentAnswer = "(No Answer)";
-                            }
-                          } else if (type == "fill_blank") {
-                            studentAnswer =
-                                studentRawAnswer?.toString() ?? "";
+                              return a.toString();
+                            }).toList();
+                            correctAnswerDisplay = list.join(", ");
+                          } else if (correctAnswerRaw is int) {
+                            correctAnswerDisplay = (correctAnswerRaw >= 0 &&
+                                correctAnswerRaw < options.length)
+                                ? options[correctAnswerRaw]
+                                : correctAnswerRaw.toString();
+                          } else {
+                            correctAnswerDisplay =
+                                correctAnswerRaw?.toString() ?? "(No Correct Answer)";
                           }
 
-                          // use correctness map from Firestore
-                          final correctnessMap = Map<String, dynamic>.from(
-                              submissionData["correctness"] ?? {});
-                          final bool isCorrect =
-                              correctnessMap[qId] == true;
+                          // Handle student's submitted answer
+                          // Handle student's submitted answer
+                          final studentRawAnswer = answersMap[qId];
+                          String studentAnswer = "(No Answer)";
+
+                          if (type == "multiple_choice") {
+                            if (studentRawAnswer is List) {
+                              // assume array of strings
+                              final selected = studentRawAnswer.whereType<String>().toList();
+                              if (selected.isNotEmpty) {
+                                studentAnswer = selected.join(", ");
+                              }
+                            } else if (studentRawAnswer is String) {
+                              studentAnswer = studentRawAnswer;
+                            }
+                          } else if (type == "fill_blank") {
+                            studentAnswer = studentRawAnswer?.toString() ?? "(No Answer)";
+                          }
+
+
+
+                          final bool isCorrect = correctnessMap[qId] == true;
 
                           return Card(
+                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 2,
                             child: ListTile(
-                              title: Text(questionText),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text("Your Answer: $studentAnswer"),
-                                  Text("Correct Answer: $correctAnswer"),
-                                ],
+                              contentPadding: const EdgeInsets.all(12),
+                              title: Text(
+                                "Q${index + 1}: $questionText",
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              subtitle: Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text("Student Answer: $studentAnswer"),
+                                    Text("Correct Answer: $correctAnswerDisplay"),
+                                  ],
+                                ),
                               ),
                               trailing: Icon(
-                                isCorrect
-                                    ? Icons.check_circle
-                                    : Icons.cancel,
-                                color: isCorrect
-                                    ? Colors.green
-                                    : Colors.red,
+                                isCorrect ? Icons.check_circle : Icons.cancel,
+                                color: isCorrect ? Colors.green : Colors.red,
+                                size: 28,
                               ),
                             ),
                           );

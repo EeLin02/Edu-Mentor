@@ -164,11 +164,13 @@ class _ManageNoticesScreenState extends State<ManageNoticesScreen> {
               final description = notice['description'];
               final fileUrls = List<String>.from(notice['fileUrls'] ?? []);
               final fileNames = List<String>.from(notice['fileNames'] ?? []);
-              final data = notice.data() as Map<String, dynamic>? ?? {};
-              final likeMap = data.containsKey('likes') ? data['likes'] as Map<String, dynamic> : {};
 
-              final likeCount = likeMap.length;
-              final likedUserIds = likeMap.keys.toList();
+              // ✅ Only declare once
+              final currentUser = FirebaseAuth.instance.currentUser;
+              final noticeData = notice.data() as Map<String, dynamic>? ?? {};
+              final likedUserIds = List<String>.from(noticeData['likes'] ?? []);
+              final likeCount = likedUserIds.length;
+
 
               return Card(
                 margin: EdgeInsets.all(8.0),
@@ -308,28 +310,25 @@ class _ManageNoticesScreenState extends State<ManageNoticesScreen> {
                             children: [
                               GestureDetector(
                                 onTap: () async {
-                                  final currentUser = FirebaseAuth.instance.currentUser;
                                   if (currentUser == null) return;
 
                                   final noticeRef = FirebaseFirestore.instance.collection('notices').doc(notice.id);
+                                  final noticeSnapshot = await noticeRef.get();
+                                  final noticeData = noticeSnapshot.data() as Map<String, dynamic>? ?? {};
+                                  final currentLikes = List<String>.from(noticeData['likes'] ?? []);
 
-                                  final currentLikes = Map<String, dynamic>.from(notice['likes'] ?? {});
-                                  final userId = currentUser.uid;
-
-                                  setState(() {
-                                    if (currentLikes.containsKey(userId)) {
-                                      currentLikes.remove(userId);
-                                    } else {
-                                      currentLikes[userId] = true;
-                                    }
-                                  });
+                                  if (currentLikes.contains(currentUser.uid)) {
+                                    currentLikes.remove(currentUser.uid);
+                                  } else {
+                                    currentLikes.add(currentUser.uid);
+                                  }
 
                                   await noticeRef.update({'likes': currentLikes});
                                 },
                                 child: Row(
                                   children: [
                                     Icon(
-                                      likedUserIds.contains(FirebaseAuth.instance.currentUser?.uid)
+                                      likedUserIds.contains(currentUser?.uid)
                                           ? Icons.thumb_up
                                           : Icons.thumb_up_outlined,
                                       size: 20,
@@ -340,7 +339,6 @@ class _ManageNoticesScreenState extends State<ManageNoticesScreen> {
                                   ],
                                 ),
                               ),
-
                               SizedBox(width: 16),
                               GestureDetector(
                                 onTap: () => _showCommentsDialog(context, notice.id),

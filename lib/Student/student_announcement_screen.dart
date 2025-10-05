@@ -23,7 +23,9 @@ class StudentAnnouncementScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final args = ModalRoute.of(context)!.settings.arguments as Map?;
-    final String? announcementId = args?['announcementId']; // from notification
+    final String? announcementId = args?['announcementId']; //
+    final String? subjectId = args?['subjectId'];
+    final String? sectionId = args?['sectionId'];
     final String? subjectName = args?['subjectName'];
     final String? sectionName = args?['sectionName'];
     final Color color = (args?['color'] ?? Colors.teal) as Color;
@@ -96,10 +98,11 @@ class StudentAnnouncementScreen extends StatelessWidget {
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: announcementsCollection
-            .where('subjectName', isEqualTo: subjectName)
-            .where('sectionName', isEqualTo: sectionName)
+            .where('subjectId', isEqualTo: subjectId)
+            .where('sectionId', isEqualTo: sectionId)
             .orderBy('timestamp', descending: true)
             .snapshots(),
+
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return const Center(child: Text('Error loading announcements'));

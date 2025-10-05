@@ -42,18 +42,57 @@ class _MentorForumScreenState extends State<MentorForumScreen> with SingleTicker
           padding: const EdgeInsets.all(12),
           itemCount: docs.length,
           itemBuilder: (context, index) {
-            final isMyPost = docs[index]['userId'] == currentUser!.uid;
-            return ForumPostCard(
-              data: docs[index],
-              currentUser: currentUser,
-              themeColor: Colors.teal,
-              showDelete: isMyPost, // ✅ Allow edit/delete only for own posts
+            final post = docs[index];
+            final isMyPost = post['userId'] == currentUser!.uid;
+            final userId = post['userId'];
+
+            return FutureBuilder<List<DocumentSnapshot>>(
+              future: Future.wait([
+                FirebaseFirestore.instance.collection('mentors').doc(userId).get(),
+                FirebaseFirestore.instance.collection('students').doc(userId).get(),
+              ]),
+              builder: (context, userSnap) {
+                if (!userSnap.hasData) return Center(child: CircularProgressIndicator());
+
+                final mentorDoc = userSnap.data![0];
+                final studentDoc = userSnap.data![1];
+
+                String userName = "Unknown";
+                String userPhoto = "";
+                String userIdNo = "";
+                String role = "unknown";
+
+                if (mentorDoc.exists) {
+                  final data = mentorDoc.data() as Map<String, dynamic>;
+                  userName = data['name'] ?? "Unknown";
+                  userPhoto = data['profileUrl'] ?? "";
+                  userIdNo = data['mentorIdNo'] ?? "";
+                  role = "mentor";
+                } else if (studentDoc.exists) {
+                  final data = studentDoc.data() as Map<String, dynamic>;
+                  userName = data['name'] ?? "Unknown";
+                  userPhoto = data['profileUrl'] ?? "";
+                  userIdNo = data['studentIdNo'] ?? "";
+                  role = "student";
+                }
+
+                return ForumPostCard(
+                  data: post,
+                  currentUser: currentUser,
+                  themeColor: Colors.teal,
+                  showDelete: isMyPost,
+                  userName: userName,
+                  userPhoto: userPhoto,
+                  userIdNo: userIdNo,
+                );
+              },
             );
           },
         );
       },
     );
   }
+
 
 
   @override

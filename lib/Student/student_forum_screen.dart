@@ -48,14 +48,49 @@ class _StudentForumScreenState extends State<StudentForumScreen> with SingleTick
           itemBuilder: (context, index) {
             final doc = docs[index];
             final isMyPost = doc['userId'] == currentUser!.uid;
-            return ForumPostCard(
-              data: doc,
-              currentUser: currentUser,
-              themeColor: Colors.blue,
-              showDelete:isMyPost, // show delete only on "My Posts"
+
+            // Use FutureBuilder to fetch user info
+            return FutureBuilder<List<DocumentSnapshot>>(
+              future: Future.wait([
+                FirebaseFirestore.instance.collection('mentors').doc(doc['userId']).get(),
+                FirebaseFirestore.instance.collection('students').doc(doc['userId']).get(),
+              ]),
+              builder: (context, userSnap) {
+                if (!userSnap.hasData) return Center(child: CircularProgressIndicator());
+
+                final mentorDoc = userSnap.data![0];
+                final studentDoc = userSnap.data![1];
+
+                String userName = "Unknown";
+                String userPhoto = "";
+                String userIdNo = "";
+
+                if (mentorDoc.exists) {
+                  final data = mentorDoc.data() as Map<String, dynamic>;
+                  userName = data['name'] ?? "Unknown";
+                  userPhoto = data['profileUrl'] ?? "";
+                  userIdNo = data['mentorIdNo'] ?? "";
+                } else if (studentDoc.exists) {
+                  final data = studentDoc.data() as Map<String, dynamic>;
+                  userName = data['name'] ?? "Unknown";
+                  userPhoto = data['profileUrl'] ?? "";
+                  userIdNo = data['studentIdNo'] ?? "";
+                }
+
+                return ForumPostCard(
+                  data: doc,
+                  currentUser: currentUser,
+                  themeColor: Colors.blue,
+                  userName: userName,
+                  userPhoto: userPhoto,
+                  userIdNo: userIdNo,
+                  showDelete: isMyPost,
+                );
+              },
             );
           },
         );
+
       },
     );
   }

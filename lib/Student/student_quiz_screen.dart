@@ -105,6 +105,8 @@ class StudentQuizzesScreen extends StatelessWidget {
                           total = submissionSnap.data?["total"] ?? 0;
                         }
 
+                        final percentage = (total > 0) ? (score / total * 100).toStringAsFixed(1) : "0";
+
                         return Card(
                           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           shape: RoundedRectangleBorder(
@@ -128,11 +130,11 @@ class StudentQuizzesScreen extends StatelessWidget {
                                 const SizedBox(height: 4),
                                 attempted
                                     ? Chip(
-                                  label: Text("✅ Completed (Score: $score/$total)"),
+                                  label: Text("✅ Completed ($percentage%)"),
                                   backgroundColor: Colors.green.shade100,
-                                  labelStyle:
-                                  const TextStyle(color: Colors.green),
+                                  labelStyle: const TextStyle(color: Colors.green),
                                 )
+
                                     : isAvailable
                                     ? Chip(
                                   label: const Text("❌ Not Attempted"),

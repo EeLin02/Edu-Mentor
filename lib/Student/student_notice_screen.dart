@@ -32,9 +32,9 @@ class NoticeScreen extends StatelessWidget {
               final data = notices[index].data() as Map<String, dynamic>;
               final noticeId = notices[index].id;
               final currentUser = FirebaseAuth.instance.currentUser;
-              final likes = Map<String, dynamic>.from(data['likes'] ?? {});
-              final isLiked =
-                  currentUser != null && likes.containsKey(currentUser.uid);
+              final likes = List<String>.from(data['likes'] ?? []);
+              final isLiked = currentUser != null && likes.contains(currentUser.uid);
+
 
               return Card(
                 margin: const EdgeInsets.all(10),
@@ -229,9 +229,7 @@ class NoticeScreen extends StatelessWidget {
                         children: [
                           IconButton(
                             icon: Icon(
-                              isLiked
-                                  ? Icons.thumb_up
-                                  : Icons.thumb_up_alt_outlined,
+                              isLiked ? Icons.thumb_up : Icons.thumb_up_alt_outlined,
                               color: isLiked ? Colors.blue : Colors.grey,
                             ),
                             onPressed: () async {
@@ -239,14 +237,19 @@ class NoticeScreen extends StatelessWidget {
                               final noticeRef = FirebaseFirestore.instance
                                   .collection('notices')
                                   .doc(noticeId);
-                              await noticeRef.update({
-                                'likes.${currentUser.uid}': isLiked
-                                    ? FieldValue.delete()
-                                    : true,
-                              });
+
+                              List<String> updatedLikes = List<String>.from(likes);
+                              if (isLiked) {
+                                updatedLikes.remove(currentUser.uid);
+                              } else {
+                                updatedLikes.add(currentUser.uid);
+                              }
+
+                              await noticeRef.update({'likes': updatedLikes});
                             },
                           ),
                           Text('${likes.length} Likes'),
+
                           const SizedBox(width: 20),
                           IconButton(
                             icon: const Icon(Icons.comment_outlined),

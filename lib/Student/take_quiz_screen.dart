@@ -103,35 +103,76 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
         .doc(widget.studentId)
         .get();
 
-    if (submissionDoc.exists) {
-      final data = submissionDoc.data()!;
-      final restoredAnswers = Map<String, dynamic>.from(data["answers"] ?? {});
+    if (!submissionDoc.exists) return;
 
-      setState(() {
-        score = data["score"] ?? 0;
-        total = data["total"] ?? 0;
-        submitted = true;
-        answers = restoredAnswers;
-        correctness = Map<String, bool>.from(data["correctness"] ?? {});
-      });
+    final data = submissionDoc.data()!;
+    final restoredAnswers = Map<String, dynamic>.from(data["answers"] ?? {});
+    final restoredCorrectness = Map<String, bool>.from(data["correctness"] ?? {});
 
-      //  update controllers so UI shows the restored answer
-      restoredAnswers.forEach((questionId, ans) {
-        if (controllers.containsKey(questionId)) {
-          controllers[questionId]!.text = ans.toString();
+    setState(() {
+      score = data["score"] ?? 0;
+      total = data["total"] ?? 0;
+      submitted = true;
+      answers = {};
+      correctness = restoredCorrectness;
+    });
+
+    // 🔹 Rebuild the answers map in the proper index form for MCQs
+    final questionsSnap = await FirebaseFirestore.instance
+        .collection("quizzes")
+        .doc(widget.quizId)
+        .collection("questions")
+        .get();
+
+    for (var q in questionsSnap.docs) {
+      final questionId = q.id;
+      final type = q["type"] ?? "multiple_choice";
+      final List<String> options =
+      (q["options"] != null) ? List<String>.from(q["options"]) : [];
+
+      if (!restoredAnswers.containsKey(questionId)) continue;
+
+      final savedAns = restoredAnswers[questionId];
+
+      if (type == "multiple_choice") {
+        final allowMultiple = q["allowMultiple"] == true;
+
+        if (allowMultiple) {
+          // MULTIPLE ANSWERS (array of strings)
+          if (savedAns is List) {
+            answers[questionId] = savedAns
+                .map((ans) => options
+                .indexWhere((opt) => opt.toLowerCase() == ans.toString().toLowerCase()))
+                .where((i) => i >= 0)
+                .toList();
+          }
         } else {
-          controllers[questionId] = TextEditingController(text: ans.toString());
+          // SINGLE ANSWER (string)
+          if (savedAns is String) {
+            final idx = options
+                .indexWhere((opt) => opt.toLowerCase() == savedAns.toLowerCase());
+            if (idx != -1) answers[questionId] = idx;
+          }
         }
-      });
+      } else if (type == "fill_blank") {
+        answers[questionId] = savedAns.toString();
+        controllers.putIfAbsent(
+          questionId,
+              () => TextEditingController(text: savedAns.toString()),
+        );
+      }
     }
   }
+
 
 
 
   Future<void> submitQuiz(List<DocumentSnapshot> questions) async {
     int newScore = 0;
     int totalQuestions = questions.length;
-    correctness.clear(); // reset each attempt
+    correctness.clear();
+
+    final normalizedAnswers = <String, dynamic>{};
 
     for (var q in questions) {
       final questionId = q.id;
@@ -139,7 +180,7 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
       final List<String> options =
       (q["options"] != null) ? List<String>.from(q["options"]) : [];
 
-      // 🔹 Normalize correct answers → always a list of lowercase strings
+      // Normalize correct answers to lowercase list
       final rawAnswer = q["correctAnswer"];
       final List<String> correctAnswers = (rawAnswer is List)
           ? rawAnswer.map((e) => e.toString().trim().toLowerCase()).toList()
@@ -151,7 +192,7 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
         final allowMultiple = q["allowMultiple"] == true;
 
         if (allowMultiple) {
-          // ----- MULTIPLE CHOICE -----
+          // MULTIPLE CHOICE (multiple answers)
           final selectedIndexes = (answers[questionId] is List)
               ? List<int>.from(answers[questionId])
               : <int>[];
@@ -161,11 +202,13 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
               .map((i) => options[i].toString().trim().toLowerCase())
               .toList();
 
-          // Correct if selected == correct exactly (no extras, no missing)
           isCorrect = selectedValues.toSet().containsAll(correctAnswers) &&
               correctAnswers.toSet().containsAll(selectedValues);
+
+          // Store readable answer
+          normalizedAnswers[questionId] = selectedValues;
         } else {
-          // ----- SINGLE CHOICE -----
+          // MULTIPLE CHOICE (single answer)
           final selectedIndex = answers[questionId] is int
               ? answers[questionId] as int
               : (answers[questionId] is num
@@ -178,16 +221,21 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
             final selectedValue =
             options[selectedIndex].toString().trim().toLowerCase();
             isCorrect = correctAnswers.contains(selectedValue);
+            normalizedAnswers[questionId] = options[selectedIndex];
+          } else {
+            normalizedAnswers[questionId] = null;
           }
         }
       } else if (type == "fill_blank") {
-        // ----- FILL IN THE BLANK -----
+        // FILL IN THE BLANK
         final studentAnswer = answers[questionId];
         if (studentAnswer != null) {
           final normalizedStudent =
           studentAnswer.toString().trim().toLowerCase();
-          // If any correct answer matches → correct
           isCorrect = correctAnswers.contains(normalizedStudent);
+          normalizedAnswers[questionId] = studentAnswer.toString();
+        } else {
+          normalizedAnswers[questionId] = "";
         }
       }
 
@@ -195,21 +243,13 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
       correctness[questionId] = isCorrect;
     }
 
-    // Update state
     setState(() {
       score = newScore;
       total = totalQuestions;
       submitted = true;
     });
 
-    // Fetch student info
-    final studentDoc = await FirebaseFirestore.instance
-        .collection("students")
-        .doc(widget.studentId)
-        .get();
-
-
-    // Save submission
+    // 🔹 Save submission
     await FirebaseFirestore.instance
         .collection("quizzes")
         .doc(widget.quizId)
@@ -218,12 +258,13 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
         .set({
       "score": newScore,
       "total": totalQuestions,
-      "answers": answers,
-      "correctness": correctness, // 🔹 Save correctness map
+      "answers": normalizedAnswers, // 🔹 Readable format
+      "correctness": correctness,
       "submittedAt": FieldValue.serverTimestamp(),
       "studentId": widget.studentId,
     }, SetOptions(merge: true));
   }
+
 
 
   Future<void> retryQuiz() async {
@@ -300,7 +341,9 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
                 Column(
                   children: [
                     Text(
-                      "Your Score: $score / $total",
+                      total > 0
+                          ? "Score: $score / $total (${(score / total * 100).toStringAsFixed(1)}%)"
+                          : "Score: 0 / 0 (0%)",
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,

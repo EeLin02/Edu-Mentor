@@ -39,8 +39,8 @@ class _StudentAttendanceRecordsScreenState
   Future<void> _fetchAttendance() async {
     final snapshot = await FirebaseFirestore.instance
         .collection('attendance')
-        .doc(widget.sectionId)
-        .collection(widget.subjectId)
+        .doc(widget.subjectId)
+        .collection(widget.sectionId)
         .get();
 
     int totalSessions = 0;
@@ -51,23 +51,27 @@ class _StudentAttendanceRecordsScreenState
     List<Map<String, dynamic>> tempList = [];
 
     for (var doc in snapshot.docs) {
+      final date = doc.id; // "2025-10-03"
       final data = doc.data();
-      final date = data['date'] ?? doc.id;
 
       if (data.containsKey(widget.studentId)) {
         totalSessions++;
         String status;
 
-        if (data[widget.studentId] == true) {
+        final value = data[widget.studentId];
+        if (value == "P") {
           status = "Present";
           present++;
-        } else if (data[widget.studentId] == "MC") {
+        } else if (value == "MC") {
           status = "MC";
           mc++;
-        } else {
+        } else if (value == "A") {
           status = "Absent";
           absent++;
+        } else {
+          status = "N/A"; // optional fallback
         }
+
 
         tempList.add({"date": date, "status": status});
       }
@@ -78,11 +82,11 @@ class _StudentAttendanceRecordsScreenState
       presentCount = present;
       absentCount = absent;
       mcCount = mc;
-      attendanceRate =
-      totalSessions > 0 ? (present / totalSessions) * 100 : 0.0;
+      attendanceRate = totalSessions > 0 ? (present / totalSessions) * 100 : 0.0;
       isLoading = false;
     });
   }
+
 
   @override
   Widget build(BuildContext context) {

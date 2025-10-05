@@ -165,7 +165,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       }
 
       final Map<String, dynamic> userData = {
-        'uid': userCredential.user!.uid,
         'name': nameController.text.trim(),
         'email': fullEmail,
         'phone': phoneNumber,

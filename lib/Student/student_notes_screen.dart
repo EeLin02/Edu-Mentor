@@ -21,11 +21,7 @@ class _StudentNotesPageState extends State<StudentNotesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-    final String subjectName = args['subjectName'];
-    final String sectionName = args['sectionName'];
-    final Color color = args['color'] ?? Colors.indigo;
-
+    final Color color = Colors.indigo;
     final bool isLight = color.computeLuminance() > 0.5;
     final Color textColor = isLight ? Colors.black87 : Colors.white;
 
@@ -38,8 +34,6 @@ class _StudentNotesPageState extends State<StudentNotesPage> {
       body: StreamBuilder<QuerySnapshot>(
         stream: _savedRef
             .where('studentId', isEqualTo: currentUser?.uid)
-            .where('subjectName', isEqualTo: subjectName)
-            .where('sectionName', isEqualTo: sectionName)
             .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
@@ -59,29 +53,42 @@ class _StudentNotesPageState extends State<StudentNotesPage> {
             padding: const EdgeInsets.all(16),
             children: docs.map((doc) {
               final data = doc.data() as Map<String, dynamic>;
-              final title = data['title'] ?? 'Untitled Resource';
-              final timestampRaw = data['timestamp'];
-              String? formattedTime;
 
+              final title = (data['title'] as String?) ?? 'Untitled Resource';
+              final resourceId = data['resourceId'] as String?;
+              final timestampRaw = data['timestamp'];
+
+              String? formattedTime;
               if (timestampRaw is Timestamp) {
                 formattedTime = _formatTimestamp(timestampRaw);
-              } else {
-                formattedTime = null;
               }
 
               return Card(
                 elevation: 2,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
                 margin: const EdgeInsets.symmetric(vertical: 6),
                 child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  leading: Icon(Icons.note_alt_outlined, color: Colors.orange[600], size: 32),
-                  title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: formattedTime != null
-                      ? Text('Saved on $formattedTime', style: const TextStyle(color: Colors.grey))
-                      : null,
+                  contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  leading: Icon(Icons.note_alt_outlined,
+                      color: Colors.orange[600], size: 32),
+                  title: Text(title,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(
+                    formattedTime != null
+                        ? "Saved on $formattedTime"
+                        : "No timestamp",
+                    style: const TextStyle(color: Colors.grey),
+                  ),
                   onTap: () async {
-                    final resourceId = data['resourceId'];
+                    if (resourceId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Resource ID missing.")),
+                      );
+                      return;
+                    }
+
                     final resourceSnap = await FirebaseFirestore.instance
                         .collection('resources')
                         .doc(resourceId)
@@ -89,7 +96,8 @@ class _StudentNotesPageState extends State<StudentNotesPage> {
 
                     if (!resourceSnap.exists) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Original resource not found.")),
+                        const SnackBar(
+                            content: Text("Original resource not found.")),
                       );
                       return;
                     }
@@ -107,7 +115,6 @@ class _StudentNotesPageState extends State<StudentNotesPage> {
                       },
                     );
                   },
-
                 ),
               );
             }).toList(),

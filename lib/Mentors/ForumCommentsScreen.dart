@@ -14,6 +14,13 @@ class _ForumCommentsScreenState extends State<ForumCommentsScreen> {
   final currentUser = FirebaseAuth.instance.currentUser;
   final TextEditingController _commentController = TextEditingController();
   Set<String> expandedComments = {};
+  String getUserIdNo(Map<String, dynamic>? userData, bool isMentor) {
+    if (userData == null) return '';
+    return isMentor
+        ? (userData['mentorIdNo'] ?? '')
+        : (userData['studentIdNo'] ?? '');
+  }
+
 
   String? userRole; // 'mentor' or 'student'
 
@@ -66,8 +73,6 @@ class _ForumCommentsScreenState extends State<ForumCommentsScreen> {
         .collection('comments')
         .add({
       'userId': uid,
-      'userName': userName,
-      'userPhoto': userPhoto,
       'text': text,
       'timestamp': FieldValue.serverTimestamp(),
       'likes': [],
@@ -131,15 +136,24 @@ class _ForumCommentsScreenState extends State<ForumCommentsScreen> {
       title: 'Delete Comment',
       content: 'Are you sure you want to delete this comment?',
       onConfirm: () async {
-        await FirebaseFirestore.instance
+        final commentRef = FirebaseFirestore.instance
             .collection('forums')
             .doc(widget.postId)
             .collection('comments')
-            .doc(commentId)
-            .delete();
+            .doc(commentId);
+
+        // Delete all replies first
+        final repliesSnapshot = await commentRef.collection('replies').get();
+        for (final doc in repliesSnapshot.docs) {
+          await doc.reference.delete();
+        }
+
+        // Then delete the comment itself
+        await commentRef.delete();
       },
     );
   }
+
 
 
   Future<void> _addReply(String commentId, String text) async {
@@ -168,8 +182,6 @@ class _ForumCommentsScreenState extends State<ForumCommentsScreen> {
         .collection('replies')
         .add({
       'userId': uid,
-      'userName': userName,
-      'userPhoto': userPhoto,
       'text': text,
       'timestamp': FieldValue.serverTimestamp(),
       'likes': [],
@@ -229,23 +241,23 @@ class _ForumCommentsScreenState extends State<ForumCommentsScreen> {
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('forums')
-              .doc(widget.postId)
-              .collection('comments')
-              .doc(commentId)
-              .collection('replies')
-              .orderBy('timestamp', descending: false)
-              .snapshots(),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) return SizedBox();
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('forums')
+          .doc(widget.postId)
+          .collection('comments')
+          .doc(commentId)
+          .collection('replies')
+          .orderBy('timestamp', descending: false)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return SizedBox();
+        final replies = snapshot.data!.docs;
 
-            final replies = snapshot.data!.docs;
-            return ListView.builder(
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListView.builder(
               shrinkWrap: true,
               physics: NeverScrollableScrollPhysics(),
               itemCount: replies.length,
@@ -254,67 +266,151 @@ class _ForumCommentsScreenState extends State<ForumCommentsScreen> {
                 final likes = List<String>.from(reply['likes'] ?? []);
                 final hasLiked = likes.contains(currentUser!.uid);
 
-                return ListTile(
-                  contentPadding: EdgeInsets.only(left: 40),
-                  title: Text(reply['userName']),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(reply['text']),
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: Icon(
-                              hasLiked
-                                  ? Icons.thumb_up
-                                  : Icons.thumb_up_outlined,
-                              size: 18,
-                              color: hasLiked ? Colors.blue : null,
-                            ),
-                            onPressed: () => _toggleReplyLike(
-                                reply.reference.parent.parent!.id,
-                                reply.id,
-                                likes),
-                          ),
-                          Text('${likes.length}'),
-                          if (reply['userId'] == currentUser!.uid)
-                            TextButton(
-                              onPressed: () => _deleteReply(commentId, reply.id),
-                              child: Text(
-                                'Delete',
-                                style: TextStyle(color: userRole == 'mentors' ? Colors.teal : Colors.blue,
-                                  fontSize: 12,)
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
+                // StreamBuilder for reply's user
+                return StreamBuilder<DocumentSnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('mentors')
+                      .doc(reply['userId'])
+                      .snapshots(),
+                  builder: (context, mentorSnap) {
+                    if (!mentorSnap.hasData) return SizedBox();
+                    DocumentSnapshot userDoc = mentorSnap.data!;
+                    bool isMentor = userDoc.exists;
+
+                    if (!isMentor) {
+                      // If not mentor, use student doc
+                      return StreamBuilder<DocumentSnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('students')
+                            .doc(reply['userId'])
+                            .snapshots(),
+                        builder: (context, studentSnap) {
+                          if (!studentSnap.hasData) return SizedBox();
+                          return _buildReplyTile(reply, likes, hasLiked, studentSnap.data!, false, commentId);
+                        },
+                      );
+                    } else {
+                      return _buildReplyTile(reply, likes, hasLiked, userDoc, true, commentId);
+                    }
+                  },
                 );
               },
-            );
-          },
-        ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton(
-            onPressed: () {
-              setState(() {
-                expandedComments.remove(commentId);
-              });
-            },
-            child: Text('Hide Replies'),
-          ),
-        ),
-      ],
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () {
+                  setState(() {
+                    expandedComments.remove(commentId);
+                  });
+                },
+                child: Text('Hide Replies'),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
+
+// Helper to reduce repetition
+  Widget _buildReplyTile(DocumentSnapshot reply, List<String> likes, bool hasLiked, DocumentSnapshot userDoc, bool isMentor, String commentId) {
+    final userData = userDoc.data() as Map<String, dynamic>?;
+
+    final userName = userData?['name'] ?? 'Unknown';
+    final userIdNo = getUserIdNo(userData, isMentor);
+    final userPhoto = userData?['profileUrl'] ?? '';
+
+    return ListTile(
+      contentPadding: EdgeInsets.only(left: 40),
+      leading: CircleAvatar(
+        backgroundImage: userPhoto.isNotEmpty ? NetworkImage(userPhoto) : null,
+        child: userPhoto.isEmpty ? Icon(Icons.person) : null,
+      ),
+      title: Text('$userName ($userIdNo)'),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(reply['text']),
+          Row(
+            children: [
+              IconButton(
+                icon: Icon(
+                  hasLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
+                  size: 18,
+                  color: hasLiked ? Colors.blue : null,
+                ),
+                onPressed: () => _toggleReplyLike(
+                    reply.reference.parent.parent!.id,
+                    reply.id,
+                    likes),
+              ),
+              Text('${likes.length}'),
+              if (reply['userId'] == currentUser!.uid)
+                TextButton(
+                  onPressed: () => _deleteReply(commentId, reply.id),
+                  child: Text(
+                    'Delete',
+                    style: TextStyle(
+                      color: isMentor ? Colors.teal : Colors.blue,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+
+
 
 
   Widget _buildCommentTile(DocumentSnapshot comment) {
     final data = comment.data() as Map<String, dynamic>;
     final likes = List<String>.from(data['likes'] ?? []);
     final hasLiked = likes.contains(currentUser!.uid);
+
+    final TextEditingController _replyController = TextEditingController();
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('mentors')
+          .doc(data['userId'])
+          .snapshots(),
+      builder: (context, mentorSnap) {
+        if (!mentorSnap.hasData) return SizedBox(height: 80, child: Center(child: CircularProgressIndicator()));
+
+        DocumentSnapshot userDoc = mentorSnap.data!;
+        bool isMentor = userDoc.exists;
+
+        if (!isMentor) {
+          // If not a mentor, listen to student doc
+          return StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance.collection('students').doc(data['userId']).snapshots(),
+            builder: (context, studentSnap) {
+              if (!studentSnap.hasData) return SizedBox(height: 80, child: Center(child: CircularProgressIndicator()));
+
+              final studentData = studentSnap.data!;
+              return _buildCommentCard(comment, likes, hasLiked, studentData, false);
+            },
+          );
+        } else {
+          return _buildCommentCard(comment, likes, hasLiked, userDoc, true);
+        }
+      },
+    );
+  }
+
+// Helper to reduce repetition
+  Widget _buildCommentCard(DocumentSnapshot comment, List<String> likes, bool hasLiked, DocumentSnapshot userDoc, bool isMentor) {
+    final userData = userDoc.data() as Map<String, dynamic>?;
+
+    final userName = userData?['name'] ?? 'Unknown User';
+    final userPhoto = userData?['profileUrl'] ?? '';
+    final userIdNo = getUserIdNo(userData, isMentor);
 
     final TextEditingController _replyController = TextEditingController();
 
@@ -328,17 +424,20 @@ class _ForumCommentsScreenState extends State<ForumCommentsScreen> {
           children: [
             ListTile(
               leading: CircleAvatar(
-                backgroundImage: NetworkImage(data['userPhoto']),
+                backgroundImage: userPhoto.isNotEmpty ? NetworkImage(userPhoto) : null,
+                child: userPhoto.isEmpty ? Icon(Icons.person) : null,
               ),
-              title: Text(data['userName']),
-              subtitle: Text(data['text']),
-              trailing: data['userId'] == currentUser!.uid
+              title: Text('$userName ($userIdNo)'),
+              subtitle: Text(comment['text']),
+              trailing: comment['userId'] == currentUser!.uid
                   ? TextButton(
                 onPressed: () => _deleteComment(comment.id),
                 child: Text(
                   'Delete',
-                  style: TextStyle(color: userRole == 'mentors' ? Colors.teal : Colors.blue,
-                    fontSize: 12,)
+                  style: TextStyle(
+                    color: isMentor ? Colors.teal : Colors.blue,
+                    fontSize: 12,
+                  ),
                 ),
               )
                   : null,

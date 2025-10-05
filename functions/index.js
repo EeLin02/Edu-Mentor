@@ -130,6 +130,72 @@ exports.checkSlaEveryHour = onSchedule("every 60 minutes", async (event) => {
   return null;
 });
 
+
+exports.notifySlaOnNewMessage = onDocumentCreated(
+  'privateChats/{chatId}/messages/{messageId}',
+  async (event) => {
+    const data = event.data.data();
+    const db = admin.firestore();
+
+    if (data.senderRole !== "student") return null;
+
+    const studentTs = data.timestamp?.toDate ? data.timestamp.toDate() : new Date();
+    const mentorId = data.mentorId;
+    const studentId = data.studentId;
+
+    // Check if mentor already replied
+    const messagesRef = event.data.ref.parent;
+    const replySnap = await messagesRef
+      .where("senderId", "==", mentorId)
+      .where("timestamp", ">", studentTs)
+      .limit(1)
+      .get();
+
+    if (!replySnap.empty) return null;
+
+    // Check muted chats
+    const ids = [mentorId, studentId].sort();
+    const chatId = ids.join("_");
+    const muteDoc = await db.collection("mutedChats").doc(chatId).get();
+    if (muteDoc.exists) return null;
+
+    // Get mentor FCM tokens
+    const mentorDoc = await db.collection("mentors").doc(mentorId).get();
+    if (!mentorDoc.exists) return null;
+
+    let tokens = [];
+    const mentorData = mentorDoc.data();
+    if (Array.isArray(mentorData?.fcmTokens)) tokens = mentorData.fcmTokens;
+    else if (mentorData?.fcmToken) tokens = [mentorData.fcmToken];
+
+    if (tokens.length === 0) return null;
+
+    // Calculate remaining SLA
+    const now = new Date();
+    const deadline = new Date(studentTs.getTime() + 48 * 60 * 60 * 1000);
+    const remainingMs = Math.max(deadline - now, 0);
+    const remainingHours = Math.floor(remainingMs / (1000 * 60 * 60));
+    const remainingMinutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+
+    // Send notification
+    await admin.messaging().sendMulticast({
+      tokens,
+      notification: {
+        title: "Student Message - SLA Reminder",
+        body: `You have ${remainingHours}h ${remainingMinutes}m left to reply to this message.`,
+      },
+      data: {
+        chatId,
+        messageId: event.params.messageId,
+        mentorId,
+        studentId,
+      },
+    });
+
+    return null;
+  }
+);
+
 exports.sendAnnouncementNotification = onDocumentCreated("announcements/{announcementId}", async (event) => {
   const data = event.data.data();
 

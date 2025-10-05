@@ -282,8 +282,6 @@ class _CreateResourceScreenState extends State<CreateResourceScreen> {
       final data = {
         'subjectId': widget.subjectId,
         'sectionId': widget.sectionId,
-        'subjectName': widget.subjectName,
-        'sectionName': widget.sectionName,
         'title': title,
         'description': _descriptionController.text.trim(),
         'category': category,

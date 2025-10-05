@@ -49,6 +49,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
     super.initState();
     _loadMuteStatus();
     studentId = FirebaseAuth.instance.currentUser!.uid;
+    _createChatIfNotExists();
     _statusStream = FirebaseFirestore.instance
         .collection('mentors')
         .doc(widget.mentorId)
@@ -71,8 +72,28 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
       FirebaseFirestore.instance.collection('privateChats').doc(chatId).collection('messages');
 
 
+  Future<void> _createChatIfNotExists() async {
+    final chatRef =
+    FirebaseFirestore.instance.collection('privateChats').doc(chatId);
+
+    final chatDoc = await chatRef.get();
+    if (!chatDoc.exists) {
+      await chatRef.set({
+        'mentorId': widget.mentorId,
+        'studentId': studentId,
+        'createdAt': FieldValue.serverTimestamp(),
+        'mutedBy': [],
+      });
+    }
+  }
+
   Future<void> _loadMuteStatus() async {
-    final muteRef = FirebaseFirestore.instance.collection('mutedChats').doc(chatId);
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final muteRef = FirebaseFirestore.instance
+        .collection('students')
+        .doc(uid)
+        .collection('mutedChats')
+        .doc(chatId);
     final doc = await muteRef.get();
     setState(() {
       _isMuted = doc.exists;
@@ -167,25 +188,27 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
   }
 
   Future<void> _toggleMuteNotifications() async {
-    final muteRef = FirebaseFirestore.instance.collection('mutedChats').doc(chatId);
-    final doc = await muteRef.get();
-    if (doc.exists) {
-      await muteRef.delete();
-      setState(() => _isMuted = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Notifications unmuted")),
-      );
-    } else {
-      await muteRef.set({
-        'mutedBy': FirebaseAuth.instance.currentUser!.uid,
-        'timestamp': FieldValue.serverTimestamp(),
+    final chatRef =
+    FirebaseFirestore.instance.collection('privateChats').doc(chatId);
+
+    final doc = await chatRef.get();
+    if (!doc.exists) return;
+
+    final mutedBy = List<String>.from(doc['mutedBy'] ?? []);
+    if (mutedBy.contains(studentId)) {
+      await chatRef.update({
+        'mutedBy': FieldValue.arrayRemove([studentId]),
       });
-      setState(() => _isMuted = true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Notifications muted")),
-      );
+      debugPrint("Chat unmuted");
+    } else {
+      await chatRef.update({
+        'mutedBy': FieldValue.arrayUnion([studentId]),
+      });
+      debugPrint("Chat muted");
     }
   }
+
+
 
   void _scrollToMessage(String messageId) {
     final key = messageKeys[messageId];
@@ -264,6 +287,8 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
     return Scaffold(
       backgroundColor: const Color(0xffECE5DD),
       appBar: AppBar(
@@ -271,6 +296,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
         titleSpacing: 0,
         title: Row(
           children: [
+
             StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
               stream: FirebaseFirestore.instance
                   .collection('mentors')
@@ -278,8 +304,8 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
                   .snapshots(),
               builder: (context, snapshot) {
                 final data = snapshot.data?.data();
-                final isOnline = data?['isOnline'] ?? false;
                 final photoUrl = data?['profileUrl'];
+                final isOnline = data?['isOnline'] ?? false;
 
                 return Row(
                   children: [
@@ -300,18 +326,37 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
                   ],
                 );
               },
-            ),
+            )
+
           ],
         ),
         actions: [
-          IconButton(
-            icon: Icon(
-              _isMuted ? Icons.notifications_off : Icons.notifications,
-              color: Colors.white,
-            ),
-            tooltip: _isMuted ? 'Unmute Notifications' : 'Mute Notifications',
-            onPressed: _toggleMuteNotifications, // same toggle function
+          StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('privateChats')
+                .doc(chatId)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || !snapshot.data!.exists) {
+                return const SizedBox.shrink(); // or a default mute icon
+              }
+
+              final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+              final mutedBy = List<String>.from(data['mutedBy'] ?? []);
+              final isMuted = mutedBy.contains(studentId);
+
+              return IconButton(
+                icon: Icon(
+                  isMuted ? Icons.notifications_off : Icons.notifications,
+                  color: Colors.white,
+                ),
+                tooltip: isMuted ? 'Unmute Notifications' : 'Mute Notifications',
+                onPressed: _toggleMuteNotifications,
+              );
+            },
           ),
+
+
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: Colors.white),
             onSelected: _handleMenuAction,
@@ -340,7 +385,23 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
               ),
               PopupMenuItem(
                 value: 'toggleMute',
-                child: Text(_isMuted ? 'Unmute Notifications' : 'Mute Notifications'),
+                child: StreamBuilder<DocumentSnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('privateChats')
+                      .doc(chatId)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData || !snapshot.data!.exists) {
+                      return const Text('Mute Notifications'); // default text
+                    }
+
+                    final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+                    final mutedBy = List<String>.from(data['mutedBy'] ?? []);
+                    final isMuted = mutedBy.contains(studentId);
+
+                    return Text(isMuted ? 'Unmute Notifications' : 'Mute Notifications');
+                  },
+                ),
               ),
             ],
           ),

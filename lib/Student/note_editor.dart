@@ -71,7 +71,10 @@ class _NoteEditorState extends State<NoteEditor> {
           'content': content,
           'timestamp': Timestamp.now(),
         });
-        _noteId = docRef.id;
+        setState(() {
+          _noteId = docRef.id;
+        });
+
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -171,10 +174,19 @@ class _NoteEditorState extends State<NoteEditor> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 if (_noteId != null)
-                  IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.delete, color: Colors.white),
+                    label: const Text("Delete", style: TextStyle(color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
                     onPressed: _deleteNote,
                   ),
+                const SizedBox(width: 12),
                 ElevatedButton.icon(
                   icon: const Icon(Icons.save, color: Colors.white),
                   label: const Text('Save Note',
@@ -184,8 +196,7 @@ class _NoteEditorState extends State<NoteEditor> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   ),
                   onPressed: _saveNote,
                 ),

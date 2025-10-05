@@ -103,10 +103,11 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _announcementsCollection
-            .where('subjectName', isEqualTo: subjectName)
-            .where('sectionName', isEqualTo: sectionName)
+            .where('subjectId', isEqualTo: args['subjectId'])
+            .where('sectionId', isEqualTo: args['sectionId'])
             .orderBy('timestamp', descending: true)
             .snapshots(),
+
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(child: Text('Error loading announcements'));

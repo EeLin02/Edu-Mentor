@@ -181,9 +181,7 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
 
     final data = {
       'subjectId': widget.subjectId ?? '',
-      'subjectName': widget.subjectName ?? '',
       'sectionId': widget.sectionId ?? '',
-      'sectionName': widget.sectionName ?? '',
       'title': title,
       'description': description,
       'files': fileUrls,

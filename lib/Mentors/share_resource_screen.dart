@@ -40,19 +40,24 @@ class _ResourceScreenState extends State<ResourceScreen> {
       context,
       '/createResource',
       arguments: {
-        'subjectId': data['subjectId'],   // include these too
-        'sectionId': data['sectionId'],   // so editing works properly
-        'subjectName': subjectName,
-        'sectionName': sectionName,
         'resourceId': doc.id,
         'title': data['title'],
         'description': data['description'],
         'category': data['category'],
-        'links': List<String>.from(data['externalLinks'] ?? []), // ✅ fixed
+        'links': List<String>.from(data['externalLinks'] ?? []),
         'color': color,
+
+        // Always take IDs from the doc itself
+        'subjectId': data['subjectId'],
+        'sectionId': data['sectionId'],
+
+        // Names still come from args → for display only
+        'subjectName': subjectName,
+        'sectionName': sectionName,
       },
     );
   }
+
 
 
   String _formatTimestamp(Timestamp timestamp) {
@@ -88,10 +93,11 @@ class _ResourceScreenState extends State<ResourceScreen> {
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _resourcesCollection
-            .where('subjectName', isEqualTo: subjectName)
-            .where('sectionName', isEqualTo: sectionName)
+            .where('subjectId', isEqualTo: args['subjectId'])
+            .where('sectionId', isEqualTo: args['sectionId'])
             .orderBy('category')
             .snapshots(),
+
         builder: (context, snapshot) {
           if (snapshot.hasError) return const Center(child: Text('Error loading resources'));
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());

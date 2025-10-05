@@ -109,7 +109,6 @@ class _EditAccountScreenState extends State<EditAccountScreen> {
       if (selectedSchoolId != null &&
           selectedSchoolId != widget.userData['schoolId']) {
         updateData['schoolId'] = selectedSchoolId;
-        updateData['schoolName'] = selectedSchoolName;
       }
 
       // --- programmes
@@ -241,6 +240,8 @@ class _EditAccountScreenState extends State<EditAccountScreen> {
         selectedProgrammeName = null;
         selectedProgrammeIds = [];
       });
+      // ✅ Make sure schoolId gets saved on Save Changes
+      widget.userData['schoolId'] = null;
     }
   }
 
@@ -272,13 +273,7 @@ class _EditAccountScreenState extends State<EditAccountScreen> {
           selectedProgrammeName = selected['name'];
         });
 
-        await FirebaseFirestore.instance
-            .collection("students")
-            .doc(widget.userId)
-            .update({
-          "programmeId": selected['id'],
-          "programmeName": selected['name'],
-        });
+
       }
     } else {
       // Mentor: multi-select with search
@@ -364,12 +359,6 @@ class _EditAccountScreenState extends State<EditAccountScreen> {
           selectedProgrammeIds = selectedList.map((s) => s['id'] as String).toList();
         });
 
-        await FirebaseFirestore.instance
-            .collection("mentors")
-            .doc(widget.userId)
-            .update({
-          "programmeIds": selectedProgrammeIds,
-        });
       }
     }
   }

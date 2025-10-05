@@ -84,7 +84,7 @@ class _MentorDashboardState extends State<MentorDashboard> {
       if (favSnap.exists && favSnap.data()?["favorites"] != null) {
         favoriteIds = Set<String>.from(favSnap.data()?["favorites"]);
       } else {
-        favoriteIds = {}; // ✅ 确保为空时不是 null
+        favoriteIds = {};
       }
 
       // --- Step 2: Load subjectMentors ---
@@ -293,8 +293,6 @@ class _MentorDashboardState extends State<MentorDashboard> {
                   'sectionId': item['sectionId'],
                   'programmeId': item['programmeId'],
                   'color': selectedMainColor?.value.toString(),
-                  'subjectName': item['subjectName'],
-                  'sectionName': item['sectionName'],
                 });
 
                 Navigator.pop(context);
@@ -763,8 +761,7 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
         if (storedColor != null) {
           try {
             if (storedColor is String && storedColor.startsWith('#')) {
-              cardColor =
-                  Color(int.parse(storedColor.replaceFirst('#', '0xff')));
+              cardColor = Color(int.parse(storedColor.replaceFirst('#', '0xff')));
             } else {
               cardColor = Color(int.parse(storedColor.toString()));
             }
@@ -772,6 +769,7 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
             print("⚠️ Failed to parse color: $storedColor → $e");
           }
         }
+
         final item = {
           'programmeId': programmeId,
           'subjectId': subjectId,
