@@ -3,7 +3,20 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class StudentNotesPage extends StatefulWidget {
-  const StudentNotesPage({super.key});
+  final String subjectId;
+  final String sectionId;
+  final String subjectName;
+  final String sectionName;
+  final Color color;
+
+  const StudentNotesPage({
+    super.key,
+    required this.subjectId,
+    required this.sectionId,
+    required this.subjectName,
+    required this.sectionName,
+    required this.color,
+  });
 
   @override
   State<StudentNotesPage> createState() => _StudentNotesPageState();
@@ -15,25 +28,30 @@ class _StudentNotesPageState extends State<StudentNotesPage> {
 
   String _formatTimestamp(Timestamp timestamp) {
     final date = timestamp.toDate();
-    return "${date.month}/${date.day}/${date.year} "
+    return "${date.day}/${date.month}/${date.year} "
         "${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}";
   }
 
   @override
   Widget build(BuildContext context) {
-    final Color color = Colors.indigo;
+    final color = widget.color;
     final bool isLight = color.computeLuminance() > 0.5;
     final Color textColor = isLight ? Colors.black87 : Colors.white;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Notes'),
+        title: Text(
+          "${widget.subjectName} - Notes",
+          style: TextStyle(color: textColor),
+        ),
         backgroundColor: color,
         foregroundColor: textColor,
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _savedRef
             .where('studentId', isEqualTo: currentUser?.uid)
+            .where('subjectId', isEqualTo: widget.subjectId)
+            .where('sectionId', isEqualTo: widget.sectionId)
             .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
@@ -46,40 +64,42 @@ class _StudentNotesPageState extends State<StudentNotesPage> {
 
           final docs = snapshot.data!.docs;
           if (docs.isEmpty) {
-            return const Center(child: Text('No saved notes yet.'));
+            return const Center(child: Text('No notes found for this subject section.'));
           }
 
           return ListView(
             padding: const EdgeInsets.all(16),
             children: docs.map((doc) {
               final data = doc.data() as Map<String, dynamic>;
+              final title = data['title'] ?? 'Untitled Note';
+              final resourceId = data['resourceId'];
+              final timestamp = data['timestamp'] as Timestamp?;
 
-              final title = (data['title'] as String?) ?? 'Untitled Resource';
-              final resourceId = data['resourceId'] as String?;
-              final timestampRaw = data['timestamp'];
-
-              String? formattedTime;
-              if (timestampRaw is Timestamp) {
-                formattedTime = _formatTimestamp(timestampRaw);
-              }
+              final formattedTime =
+              timestamp != null ? _formatTimestamp(timestamp) : "No timestamp";
 
               return Card(
-                elevation: 2,
+                elevation: 6, // ⬆️ stronger shadow
+                shadowColor: Colors.black.withOpacity(0.3), // soft dark shadow
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                margin: const EdgeInsets.symmetric(vertical: 6),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                color: Colors.white, // ✅ solid white for contrast
                 child: ListTile(
-                  contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  leading: Icon(Icons.note_alt_outlined,
-                      color: Colors.orange[600], size: 32),
-                  title: Text(title,
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  leading: Icon(Icons.note_alt_outlined, color: color, size: 32),
+                  title: Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black, // ✅ title in black
+                    ),
+                  ),
                   subtitle: Text(
-                    formattedTime != null
-                        ? "Saved on $formattedTime"
-                        : "No timestamp",
-                    style: const TextStyle(color: Colors.grey),
+                    "Saved on $formattedTime",
+                    style: const TextStyle(
+                      color: Colors.black54, // ✅ readable grey text
+                    ),
                   ),
                   onTap: () async {
                     if (resourceId == null) {
@@ -96,14 +116,12 @@ class _StudentNotesPageState extends State<StudentNotesPage> {
 
                     if (!resourceSnap.exists) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text("Original resource not found.")),
+                        const SnackBar(content: Text("Original resource not found.")),
                       );
                       return;
                     }
 
-                    final fullData = resourceSnap.data()!;
-                    fullData['resourceId'] = resourceId;
+                    final fullData = resourceSnap.data()!..['resourceId'] = resourceId;
 
                     Navigator.pushNamed(
                       context,
@@ -117,6 +135,7 @@ class _StudentNotesPageState extends State<StudentNotesPage> {
                   },
                 ),
               );
+
             }).toList(),
           );
         },

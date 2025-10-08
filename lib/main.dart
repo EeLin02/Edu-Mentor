@@ -353,9 +353,6 @@ class MyApp extends StatelessWidget {
           );
         },
 
-
-        '/studentNotes': (context) => const StudentNotesPage(),
-
         '/studentNoteDetail': (context) {
           final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
           args['data']['resourceId'] = args['docId'];
@@ -389,6 +386,24 @@ class MyApp extends StatelessWidget {
 
 
       },
+      onGenerateRoute: (settings) {
+        if (settings.name == '/studentNotes') {
+          final args = settings.arguments as Map<String, dynamic>;
+
+          return MaterialPageRoute(
+            builder: (context) => StudentNotesPage(
+              subjectId: args['subjectId'],
+              sectionId: args['sectionId'],
+              subjectName: args['subjectName'],
+              sectionName: args['sectionName'],
+              color: args['color'],
+            ),
+          );
+        }
+
+        return null; // fallback if no route matched
+      },
+
     );
   }
 }

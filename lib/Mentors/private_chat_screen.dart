@@ -537,7 +537,7 @@ void _requestPermission() async {
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text("Clear"),
+            child: const Text("Clear",style: TextStyle(color: Colors.white),),
           ),
         ],
       ),

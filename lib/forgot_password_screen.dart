@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   @override
@@ -9,25 +10,48 @@ class ForgotPasswordScreen extends StatefulWidget {
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final TextEditingController _emailController = TextEditingController();
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  Future<bool> _emailExistsInFirestore(String email) async {
+    final collections = ['students', 'mentors', 'admins'];
+    for (final collection in collections) {
+      final query = await _firestore
+          .collection(collection)
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+
+      if (query.docs.isNotEmpty) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   void _resetPassword() async {
-    final email = _emailController.text.trim();
+    final email = _emailController.text.trim().toLowerCase();
 
     if (email.isEmpty) {
       _showMessage("Please enter your email.");
       return;
     }
 
-    if (!(email.endsWith("@newinti.edu.my") || email.endsWith("@student.newinti.edu.my"))) {
-      _showMessage("Only mentor and student emails can reset passwords.");
-      return;
-    }
 
     try {
+      // 🔍 Step 1: Check if email exists in Firestore (students/mentors/admins)
+      final exists = await _emailExistsInFirestore(email);
+      if (!exists) {
+        _showMessage("Email not found in our system. Please contact admin.");
+        return;
+      }
+
+      // 🔐 Step 2: Send Firebase Auth password reset email
       await _auth.sendPasswordResetEmail(email: email);
       _showMessage("Password reset link has been sent to your email.");
+    } on FirebaseAuthException catch (e) {
+      _showMessage("Firebase Error: ${e.message}");
     } catch (e) {
-      _showMessage("Error: ${e.toString()}");
+      _showMessage("Something went wrong: $e");
     }
   }
 
@@ -35,12 +59,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text("Reset Password"),
+        title: const Text("Reset Password"),
         content: Text(message),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text("OK"),
+            child: const Text("OK"),
           ),
         ],
       ),
@@ -52,7 +76,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     return Scaffold(
       backgroundColor: Colors.blue[50],
       appBar: AppBar(
-        title: Text("Forgot Password"),
+        title: const Text("Forgot Password"),
         backgroundColor: Colors.blueAccent,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -71,12 +95,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Icon inside the card
                   Icon(Icons.lock_reset, size: 80, color: Colors.blueAccent),
-                  SizedBox(height: 16),
-
-                  // Title
-                  Text(
+                  const SizedBox(height: 16),
+                  const Text(
                     "Forgot Password?",
                     style: TextStyle(
                       fontSize: 24,
@@ -84,24 +105,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       color: Colors.blueAccent,
                     ),
                   ),
-                  SizedBox(height: 12),
-
-                  // Subtitle
+                  const SizedBox(height: 12),
                   Text(
                     "Enter your email and we'll send you a link to reset your password.",
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 16, color: Colors.grey[700]),
                   ),
-                  SizedBox(height: 24),
-
-                  // Email field
+                  const SizedBox(height: 24),
                   TextField(
                     controller: _emailController,
-                    style: TextStyle(color: Colors.black),
+                    style: const TextStyle(color: Colors.black),
                     decoration: InputDecoration(
                       labelText: "Email",
-                      labelStyle: TextStyle(color: Colors.black),
-                      prefixIcon: Icon(Icons.email, color: Colors.blue),
+                      labelStyle: const TextStyle(color: Colors.black),
+                      prefixIcon: const Icon(Icons.email, color: Colors.blue),
                       filled: true,
                       fillColor: Colors.blue[50],
                       border: OutlineInputBorder(
@@ -111,22 +128,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     ),
                     keyboardType: TextInputType.emailAddress,
                   ),
-                  SizedBox(height: 24),
-
-                  // Button
+                  const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _resetPassword,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blueAccent,
-                        padding: EdgeInsets.symmetric(vertical: 16),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
                         elevation: 4,
                       ),
-                      child: Text(
+                      child: const Text(
                         "Request Password",
                         style: TextStyle(
                           fontSize: 16,

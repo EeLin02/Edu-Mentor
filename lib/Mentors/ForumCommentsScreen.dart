@@ -56,16 +56,14 @@ class _ForumCommentsScreenState extends State<ForumCommentsScreen> {
     DocumentSnapshot userDoc;
 
     // Try mentors first
-    userDoc = await FirebaseFirestore.instance.collection('mentors').doc(uid).get();
+    userDoc = await FirebaseFirestore.instance.collection('mentors')
+        .doc(uid).get();
     if (!userDoc.exists) {
       // If not a mentor, try students
-      userDoc = await FirebaseFirestore.instance.collection('students').doc(uid).get();
+      userDoc = await FirebaseFirestore.instance.collection('students')
+          .doc(uid).get();
     }
-
     final userData = userDoc.data() as Map<String, dynamic>?;
-
-    final userName = userData?['name'] ?? 'Unknown User';
-    final userPhoto = userData?['fileUrl'] ?? '';
 
     await FirebaseFirestore.instance
         .collection('forums')
@@ -77,7 +75,6 @@ class _ForumCommentsScreenState extends State<ForumCommentsScreen> {
       'timestamp': FieldValue.serverTimestamp(),
       'likes': [],
     });
-
     _commentController.clear();
   }
 
@@ -143,7 +140,8 @@ class _ForumCommentsScreenState extends State<ForumCommentsScreen> {
             .doc(commentId);
 
         // Delete all replies first
-        final repliesSnapshot = await commentRef.collection('replies').get();
+        final repliesSnapshot = await commentRef.collection('replies')
+            .get();
         for (final doc in repliesSnapshot.docs) {
           await doc.reference.delete();
         }
@@ -163,17 +161,13 @@ class _ForumCommentsScreenState extends State<ForumCommentsScreen> {
     DocumentSnapshot userDoc;
 
     // Try mentors first
-    userDoc = await FirebaseFirestore.instance.collection('mentors').doc(uid).get();
+    userDoc = await FirebaseFirestore.instance.collection('mentors')
+        .doc(uid).get();
     if (!userDoc.exists) {
       // Try students
-      userDoc = await FirebaseFirestore.instance.collection('students').doc(uid).get();
+      userDoc = await FirebaseFirestore.instance.collection('students')
+          .doc(uid).get();
     }
-
-    final userData = userDoc.data() as Map<String, dynamic>?;
-
-    final userName = userData?['name'] ?? 'Unknown User';
-    final userPhoto = userData?['fileUrl'] ?? '';
-
     await FirebaseFirestore.instance
         .collection('forums')
         .doc(widget.postId)

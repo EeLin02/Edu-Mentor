@@ -42,7 +42,8 @@ class StudentQuizzesScreen extends StatelessWidget {
           final quizzes = snapshot.data!.docs;
           if (quizzes.isEmpty) {
             return const Center(
-              child: Text("No quizzes available yet.", style: TextStyle(fontSize: 16)),
+              child: Text("No quizzes available yet.", style: TextStyle(
+                  fontSize: 16)),
             );
           }
 

@@ -30,7 +30,8 @@ class _StudentResourceScreenState extends State<StudentResourceScreen> {
 
   String _twoDigits(int n) => n.toString().padLeft(2, '0');
 
-  Future<void> _toggleBookmark(String resourceId, Map<String, dynamic> resourceData) async {
+  Future<void> _toggleBookmark(String resourceId, Map<String,
+      dynamic> resourceData) async {
     if (currentUser == null) return;
 
     final query = await _savedCollection
@@ -44,6 +45,8 @@ class _StudentResourceScreenState extends State<StudentResourceScreen> {
     } else {
       await _savedCollection.add({
         'studentId': currentUser!.uid,
+        'subjectId': resourceData['subjectId'],
+        'sectionId': resourceData['sectionId'],
         'resourceId': resourceId,
         'title': resourceData['title'] ?? '',
         'timestamp': FieldValue.serverTimestamp(),
@@ -90,8 +93,8 @@ class _StudentResourceScreenState extends State<StudentResourceScreen> {
           ? const Center(child: Text("Invalid subject or section."))
           : StreamBuilder<QuerySnapshot>(
         stream: _resourcesCollection
-            .where('subjectId', isEqualTo: subjectId)   // ✅ safe now
-            .where('sectionId', isEqualTo: sectionId)   // ✅ safe now
+            .where('subjectId', isEqualTo: subjectId)
+            .where('sectionId', isEqualTo: sectionId)
             .orderBy('category')
             .snapshots(),
         builder: (context, snapshot) {

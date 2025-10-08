@@ -144,7 +144,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     }
 
     try {
-      final fullEmail = getFullEmail(emailController.text.trim());
+      final fullEmail = getFullEmail(emailController.text.trim().toLowerCase());
 
       final UserCredential userCredential =
       await _auth.createUserWithEmailAndPassword(

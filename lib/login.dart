@@ -29,6 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     try {
+      // Sign in with Firebase Authentication
       final userCredential = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,

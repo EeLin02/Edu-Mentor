@@ -82,7 +82,8 @@ class _StudentAttendanceRecordsScreenState
       presentCount = present;
       absentCount = absent;
       mcCount = mc;
-      attendanceRate = totalSessions > 0 ? (present / totalSessions) * 100 : 0.0;
+      attendanceRate = totalSessions > 0 ? (present / totalSessions)
+          * 100 : 0.0;
       isLoading = false;
     });
   }

@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../file_preview_screen.dart'; // 👈 import file preview
+import '../file_preview_screen.dart'; // import file preview
 
 class PreviewAnnouncementScreen extends StatefulWidget {
   final Map<String, dynamic> data;
@@ -34,7 +34,8 @@ class _PreviewAnnouncementScreenState extends State<PreviewAnnouncementScreen> {
 
     if (mentorsId == null || mentorsId.isEmpty) return [];
 
-    final mentorDoc = await firestore.collection('mentors').doc(mentorsId).get();
+    final mentorDoc = await firestore.collection('mentors').doc(mentorsId)
+        .get();
 
     if (!mentorDoc.exists) return [];
 

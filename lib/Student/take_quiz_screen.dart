@@ -80,7 +80,7 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
 
       if (querySnap.docs.isNotEmpty) {
         setState(() {
-          nextQuizDoc = querySnap.docs.first; // ✅ just store it
+          nextQuizDoc = querySnap.docs.first; // just store it
         });
       } else {
         setState(() {

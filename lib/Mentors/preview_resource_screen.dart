@@ -47,7 +47,8 @@ class PreviewResourceScreen extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => FilePreviewScreen(fileUrl: fileUrl,      fileName: fileName, // ✅ add this line
+                      builder: (_) => FilePreviewScreen(fileUrl: fileUrl,
+                        fileName: fileName,
                       ),
                     ),
                   );

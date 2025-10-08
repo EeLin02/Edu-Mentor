@@ -680,14 +680,14 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
     if (result != null && result.files.single.path != null) {
       final pickedFile = File(result.files.single.path!);
       final fileName = path.basename(pickedFile.path);
-
       try {
         final ref = FirebaseStorage.instance
             .ref()
             .child('chat_uploads/$chatId/$fileName');
         await ref.putFile(pickedFile);
         final downloadUrl = await ref.getDownloadURL();
-        final mimeType = lookupMimeType(pickedFile.path) ?? 'application/octet-stream';
+        final mimeType = lookupMimeType(pickedFile.path) ??
+            'application/octet-stream';
 
         await messageCollection.add({
           'fileUrl': downloadUrl,
@@ -904,4 +904,3 @@ class ChatSearchDelegate extends SearchDelegate<String?> {
   @override
   Widget buildSuggestions(BuildContext context) => buildResults(context);
 }
-

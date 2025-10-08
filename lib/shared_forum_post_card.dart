@@ -27,7 +27,8 @@ class ForumPostCard extends StatelessWidget {
 
   void _toggleLike(String postId, List likes) async {
     final userId = currentUser!.uid;
-    final postRef = FirebaseFirestore.instance.collection('forums').doc(postId);
+    final postRef = FirebaseFirestore.instance.collection('forums')
+        .doc(postId);
 
     if (likes.contains(userId)) {
       await postRef.update({'likes': FieldValue.arrayRemove([userId])});
@@ -43,13 +44,16 @@ class ForumPostCard extends StatelessWidget {
         title: Text('Confirm Delete'),
         content: Text('Are you sure you want to delete this post?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: Text('Delete')),
+          TextButton(onPressed: () => Navigator.pop(context, false),
+              child: Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true),
+              child: Text('Delete')),
         ],
       ),
     );
     if (confirm == true) {
-      await FirebaseFirestore.instance.collection('forums').doc(docId).delete();
+      await FirebaseFirestore.instance.collection('forums').doc(docId)
+          .delete();
     }
   }
 

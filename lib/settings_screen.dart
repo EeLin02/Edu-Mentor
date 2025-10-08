@@ -41,6 +41,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  // Save user preferences to Firestore
   Future<void> _updateUserSetting(String key, dynamic value) async {
     await FirebaseFirestore.instance
         .collection('userSettings')
@@ -72,6 +73,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(
         title: Text("Settings"),
         backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),

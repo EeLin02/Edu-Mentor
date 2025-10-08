@@ -61,6 +61,7 @@ class _CreateForumPostScreenState extends State<CreateForumPostScreen> {
         .doc(uid)
         .get();
 
+    // Create Forum Post
     await FirebaseFirestore.instance.collection('forums').add({
       'userId': uid,
       'text': text,
