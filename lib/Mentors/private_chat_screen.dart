@@ -439,7 +439,7 @@ void _requestPermission() async {
           );
         }
 
-        // 4 秒后取消黄色高亮
+        // 4 second to remove the highlight
         Future.delayed(const Duration(seconds: 4), () {
           if (mounted && _highlightedMessageId == matchId) {
             setState(() => _highlightedMessageId = null);

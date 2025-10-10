@@ -297,7 +297,8 @@ class _EditNoticeScreenState extends State<EditNoticeScreen> {
         return await storageRef.getDownloadURL();
       }));
 
-      // Prepare updated file lists: keep existing files that are not removed + newly uploaded URLs/names
+      // Prepare updated file lists: keep existing files that are not removed
+      // + newly uploaded URLs/names
       final updatedFileUrls = <String>[];
       final updatedFileNames = <String>[];
 

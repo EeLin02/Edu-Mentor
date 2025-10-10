@@ -229,18 +229,23 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
             const SizedBox(height: 16),
 
             // --- Publish Date ---
+            // --- Publish Date ---
             Row(
               children: [
                 Expanded(
                   child: Text(
                     _publishDate == null
                         ? "No date selected"
-                        : "Publish Date: ${_publishDate!.toLocal()}".split(' ')[0],
+                        : "Publish Date: ${_publishDate!.day}/${_publishDate!.month}/${_publishDate!.year}",
                   ),
                 ),
                 ElevatedButton.icon(
                   icon: const Icon(Icons.calendar_today),
-                  label: const Text("Pick Date"),
+                  label: Text(
+                    _publishDate == null
+                        ? "Pick Date"
+                        : "${_publishDate!.day}/${_publishDate!.month}/${_publishDate!.year}",
+                  ),
                   onPressed: () async {
                     DateTime? picked = await showDatePicker(
                       context: context,
@@ -257,6 +262,7 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
                 ),
               ],
             ),
+
             const SizedBox(height: 20),
 
             // --- Add/Edit Questions ---
@@ -1380,4 +1386,3 @@ class _QuizStatsDetailScreenState extends State<QuizStatsDetailScreen> {
     }
   }
 }
-

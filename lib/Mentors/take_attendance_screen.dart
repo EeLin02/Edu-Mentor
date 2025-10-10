@@ -52,8 +52,8 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
     selectedDate = widget.initialDate ?? DateTime.now();
     _searchController = TextEditingController();
 
-    _loadClassTimes().then((_) async {
-      _checkIfClassExists();
+    _loadSectionTimes().then((_) async {
+      _checkIfSectionExists();
       if (_hasClassOnSelectedDate) {
         await _loadStudentsAndAttendance();
       } else {
@@ -68,7 +68,7 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
     super.dispose();
   }
 
-  Future<void> _loadClassTimes() async {
+  Future<void> _loadSectionTimes() async {
     try {
       final secDoc = await _firestore
           .collection('schools')
@@ -90,7 +90,7 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
     }
   }
 
-  void _checkIfClassExists() {
+  void _checkIfSectionExists() {
     final weekdayName = _weekdayName(selectedDate.weekday);
     print("SelectedDate: $selectedDate, WeekdayName: $weekdayName");
 
@@ -245,7 +245,7 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
         _loading = true;
       });
 
-      _checkIfClassExists(); // check selectedDate
+      _checkIfSectionExists(); // check selectedDate
 
       if (_hasClassOnSelectedDate) {
         await _loadStudentsAndAttendance();

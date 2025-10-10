@@ -26,110 +26,128 @@ exports.setAccountDisabled = onCall(async (request) => {
 
 // Scheduled function: check SLA every 60 minutes
 exports.checkSlaEveryHour = onSchedule("every 60 minutes", async (event) => {
-  const now = admin.firestore.Timestamp.now();
-  const cutoffMillis = Date.now() - 48 * 60 * 60 * 1000; // 48 hours ago
+  const cutoffMillis = Date.now() - 48 * 60 * 60 * 1000; // 48 hours
   const cutoffTimestamp = admin.firestore.Timestamp.fromMillis(cutoffMillis);
 
-  const db = admin.firestore();
-  const qSnapshot = await db
-    .collectionGroup("messages")
-    .where("senderRole", "==", "student")
-    .where("slaNotified", "==", false)
-    .where("timestamp", "<=", cutoffTimestamp)
-    .limit(500)
-    .get();
+    const db = admin.firestore();
 
-  if (qSnapshot.empty) {
-    console.log("No candidate messages for SLA check.");
-    return null;
-  }
+    const qSnapshot = await db
+      .collectionGroup("messages")
+      .where("senderRole", "==", "student")
+      .where("slaNotified", "==", false)
+      .where("timestamp", "<=", cutoffTimestamp)
+      .limit(500)
+      .get();
 
-  for (const msgDoc of qSnapshot.docs) {
-    try {
-      const data = msgDoc.data();
-      const studentTs = data.timestamp;
-      const mentorId = data.mentorId;
-      const studentId = data.studentId;
+    if (qSnapshot.empty) {
+      console.log("No candidate messages for SLA check.");
+      return null;
+    }
 
-      if (!studentTs || !mentorId || !studentId) {
-        console.warn("Skipping message missing metadata:", msgDoc.id);
-        continue;
-      }
+    for (const msgDoc of qSnapshot.docs) {
+      try {
+        const data = msgDoc.data();
+        const studentTs = data.timestamp;
+        const mentorId = data.mentorId;
+        const studentId = data.studentId;
 
-      // check if mentor replied after studentTs
-      const messagesCollectionRef = msgDoc.ref.parent;
-      const replySnap = await messagesCollectionRef
-        .where("senderId", "==", mentorId)
-        .where("timestamp", ">", studentTs)
-        .limit(1)
-        .get();
+        if (!studentTs || !mentorId || !studentId) continue;
 
-      if (!replySnap.empty) continue;
+        // Check if mentor replied after studentTs
+        const messagesCollectionRef = msgDoc.ref.parent;
+        const replySnap = await messagesCollectionRef
+          .where("senderId", "==", mentorId)
+          .where("timestamp", ">", studentTs)
+          .limit(1)
+          .get();
+        if (!replySnap.empty) continue;
 
-       // NEW: Check mute
-        const ids = [mentorId, studentId].sort();
-        const chatId = ids.join("_");
-        const muteDoc = await db.collection("mutedChats").doc(chatId).get();
-        if (muteDoc.exists) {
-          console.log(`Chat ${chatId} is muted, skip SLA notification.`);
-          continue;
+        // Get chatId and check mutedBy
+        const chatId = msgDoc.ref.parent.parent?.id;
+        if (!chatId) continue;
+        const chatDoc = await db.collection("privateChats").doc(chatId).get();
+        if (!chatDoc.exists) continue;
+        const mutedBy = chatDoc.data()?.mutedBy ?? [];
+        if (mutedBy.includes(mentorId) || mutedBy.includes(studentId)) continue;
+
+        // --- Notify Mentor ---
+        const mentorDoc = await db.collection("mentors").doc(mentorId).get();
+        if (mentorDoc.exists) {
+          let mentorTokens = [];
+          const mentorData = mentorDoc.data();
+          if (Array.isArray(mentorData?.fcmTokens)) mentorTokens = mentorData.fcmTokens;
+          else if (mentorData?.fcmToken) mentorTokens = [mentorData.fcmToken];
+
+          if (mentorTokens.length > 0) {
+            const text = (data.text ?? "Attachment").toString();
+            const short = text.length > 120 ? text.substring(0, 117) + "..." : text;
+
+            await admin.messaging().sendMulticast({
+              tokens: mentorTokens,
+              notification: {
+                title: "SLA Alert — Unanswered Student Message",
+                body: "A student message has gone unanswered for over 48 hours: " + short,
+              },
+              data: {
+                chatId,
+                messageId: msgDoc.id,
+                mentorId,
+                studentId,
+              },
+            });
+
+            console.log("Mentor notified:", mentorId);
+          }
         }
 
-      const mentorDoc = await db.collection("mentors").doc(mentorId).get();
-      if (!mentorDoc.exists) {
-        console.warn("Mentor doc not found for id", mentorId);
-        continue;
+        // --- Notify Student ---
+        const studentDoc = await db.collection("students").doc(studentId).get();
+        if (studentDoc.exists) {
+          let studentTokens = [];
+          const studentData = studentDoc.data();
+          if (Array.isArray(studentData?.fcmTokens)) studentTokens = studentData.fcmTokens;
+          else if (studentData?.fcmToken) studentTokens = [studentData.fcmToken];
+
+          if (studentTokens.length > 0) {
+            await admin.messaging().sendMulticast({
+              tokens: studentTokens,
+              notification: {
+                title: "Mentor Has Not Replied Yet",
+                body: "Your message sent over 48 hours ago has not received a reply from your mentor yet.",
+              },
+              data: {
+                chatId,
+                messageId: msgDoc.id,
+                mentorId,
+                studentId,
+              },
+            });
+
+            console.log("Student notified:", studentId);
+          }
+        }
+
+        // --- Update SLA flag ---
+        await msgDoc.ref.update({ slaNotified: true });
+
+        // --- Log SLA breach ---
+        await db.collection("slaBreaches").add({
+          chatId,
+          messageId: msgDoc.id,
+          mentorId,
+          studentId,
+          messageText: data.text ?? null,
+          messageTimestamp: studentTs,
+          detectedAt: admin.firestore.Timestamp.now(),
+        });
+
+      } catch (err) {
+        console.error("Error handling SLA for message", msgDoc.id, err);
       }
-
-      const mentorData = mentorDoc.data();
-      let tokens = [];
-      if (Array.isArray(mentorData?.fcmTokens)) {
-        tokens = mentorData.fcmTokens;
-      } else if (mentorData?.fcmToken) {
-        tokens = [mentorData.fcmToken];
-      }
-
-      if (tokens.length > 0) {
-        const text = (data.text ?? "Attachment").toString();
-        const short = text.length > 120 ? text.substring(0, 117) + "..." : text;
-
-        const message = {
-          tokens,
-          notification: {
-            title: "SLA Alert — Unanswered Student Message",
-            body: "A student message has gone unanswered for over 48 hours: " + short,
-          },
-          data: {
-            chatId: msgDoc.ref.parent.parent?.id ?? "",
-            messageId: msgDoc.id,
-            mentorId,
-            studentId,
-          },
-        };
-
-        const response = await admin.messaging().sendMulticast(message);
-        console.log("FCM send response:", response);
-      }
-
-      await msgDoc.ref.update({ slaNotified: true });
-
-      await db.collection("slaBreaches").add({
-        chatId: msgDoc.ref.parent.parent?.id ?? "",
-        messageId: msgDoc.id,
-        mentorId,
-        studentId,
-        messageText: data.text ?? null,
-        messageTimestamp: studentTs,
-        detectedAt: admin.firestore.Timestamp.now(),
-      });
-    } catch (err) {
-      console.error("Error handling SLA for msg", msgDoc.id, err);
     }
-  }
 
-  return null;
-});
-
+    return null;
+  });
 
 exports.notifySlaOnNewMessage = onDocumentCreated(
   'privateChats/{chatId}/messages/{messageId}',
@@ -154,10 +172,11 @@ exports.notifySlaOnNewMessage = onDocumentCreated(
     if (!replySnap.empty) return null;
 
     // Check muted chats
-    const ids = [mentorId, studentId].sort();
-    const chatId = ids.join("_");
-    const muteDoc = await db.collection("mutedChats").doc(chatId).get();
-    if (muteDoc.exists) return null;
+    const chatId = event.params.chatId;
+    const chatDoc = await db.collection("privateChats").doc(chatId).get();
+    if (!chatDoc.exists) return null;
+    const mutedBy = chatDoc.data()?.mutedBy ?? [];
+    if (mutedBy.includes(mentorId) || mutedBy.includes(studentId)) return null;
 
     // Get mentor FCM tokens
     const mentorDoc = await db.collection("mentors").doc(mentorId).get();
@@ -191,7 +210,6 @@ exports.notifySlaOnNewMessage = onDocumentCreated(
         studentId,
       },
     });
-
     return null;
   }
 );
@@ -200,12 +218,12 @@ exports.sendAnnouncementNotification = onDocumentCreated("announcements/{announc
   const data = event.data.data();
 
   const title = data.title || "New Announcement";
-  const body = `${data.subjectName} - ${data.className}`;
+  const body = `${data.subjectName} - ${data.sectionName}`;
 
   // You would store FCM tokens under each student’s user doc
   const tokensSnap = await admin.firestore()
     .collection("students")
-    .where("className", "==", data.className)
+    .where("sectionName", "==", data.sectionName)
     .where("subjectName", "==", data.subjectName)
     .get();
 
@@ -217,7 +235,7 @@ exports.sendAnnouncementNotification = onDocumentCreated("announcements/{announc
     await admin.messaging().sendEachForMulticast({
       tokens,
       notification: { title, body },
-      data: { subjectName: data.subjectName, className: data.className }
+      data: { subjectName: data.subjectName, sectionName: data.sectionName }
     });
   }
 });
