@@ -226,6 +226,8 @@ class NoticeScreen extends StatelessWidget {
                       ),
                       const Divider(),
 
+                      LatestCommentsWidget(noticeId: noticeId),
+
                       // Like and Comment
                       Row(
                         children: [

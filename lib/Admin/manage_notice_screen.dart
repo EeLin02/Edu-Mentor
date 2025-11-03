@@ -207,14 +207,38 @@ class _ManageNoticesScreenState extends State<ManageNoticesScreen> {
                                   ),
                                 );
                               } else if (value == 'delete') {
-                                await FirebaseFirestore.instance
-                                    .collection('notices')
-                                    .doc(notice.id)
-                                    .delete();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Notice deleted')),
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: Text('Delete Notice'),
+                                    content: Text('Are you sure you want to delete this notice? This action cannot be undone.'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.of(context).pop(false),
+                                        child: Text('Cancel'),
+                                      ),
+                                      ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.red,
+                                        foregroundColor: Colors.white),
+                                        onPressed: () => Navigator.of(context).pop(true),
+                                        child: Text('Delete'),
+                                      ),
+                                    ],
+                                  ),
                                 );
+
+                                if (confirm == true) {
+                                  await FirebaseFirestore.instance
+                                      .collection('notices')
+                                      .doc(notice.id)
+                                      .delete();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Notice deleted successfully')),
+                                  );
+                                }
                               }
+
                             },
                             itemBuilder: (context) => [
                               PopupMenuItem(

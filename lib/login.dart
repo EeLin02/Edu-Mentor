@@ -59,7 +59,8 @@ class _LoginScreenState extends State<LoginScreen> {
       if (userDocStudent.exists) {
         // Student role
         if (token != null) {
-          await FirebaseFirestore.instance.collection('students').doc(user.uid).set(
+          await FirebaseFirestore.instance.collection('students').doc(user.uid)
+              .set(
             {'fcmToken': token},
             SetOptions(merge: true),
           );
@@ -114,10 +115,54 @@ class _LoginScreenState extends State<LoginScreen> {
       // ❌ No role assigned
       _showError("No valid role assigned.");
     } on FirebaseAuthException catch (e) {
-      _showError(e.message ?? "Authentication error");
-    } catch (e) {
+      String errorMessage;
+
+      switch (e.code) {
+        case 'user-not-found':
+          errorMessage = "Email not found in the system.";
+          break;
+        case 'wrong-password':
+          errorMessage = "Incorrect password. Please try again.";
+          break;
+        case 'invalid-email':
+          errorMessage = "The email address format is invalid.";
+          break;
+        case 'user-disabled':
+          errorMessage = "This account has been disabled. Please contact support.";
+          break;
+        case 'invalid-credential':
+        // Try to check if the email actually exists in Firestore (optional)
+          final userExists = await _checkIfUserExists(email);
+          if (userExists) {
+            errorMessage = "Incorrect password. Please try again.";
+          } else {
+            errorMessage = "No account found with this email address.";
+          }
+          break;
+
+        default:
+          errorMessage = "Login failed (${e.code}). Please try again.";
+      }
+      _showError(errorMessage);
+    }
+    catch (e) {
       _showError("Something went wrong: $e");
     }
+  }
+
+  Future<bool> _checkIfUserExists(String email) async {
+    final users = ['students', 'mentors', 'admins'];
+    for (var collection in users) {
+      final query = await FirebaseFirestore.instance
+          .collection(collection)
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+      if (query.docs.isNotEmpty) {
+        return true;
+      }
+    }
+    return false;
   }
 
 

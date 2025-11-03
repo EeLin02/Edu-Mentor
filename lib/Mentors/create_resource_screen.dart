@@ -155,19 +155,16 @@ class _CreateResourceScreenState extends State<CreateResourceScreen> {
         ],
       ),
     );
-
     if (newName != null && newName.isNotEmpty && newName != oldName) {
       final docRef = FirebaseFirestore.instance
           .collection('resource_categories')
           .doc('${widget.sectionId}_${widget.subjectId}');
-
       await docRef.update({
         'categories': FieldValue.arrayRemove([oldName])
       });
       await docRef.update({
         'categories': FieldValue.arrayUnion([newName])
       });
-
       setState(() {
         _allCategories.remove(oldName);
         _allCategories.add(newName);
@@ -339,7 +336,6 @@ class _CreateResourceScreenState extends State<CreateResourceScreen> {
             ],
           ),
     );
-
     if (result != null && result.isNotEmpty) {
       final categoryRef = FirebaseFirestore.instance
           .collection('resource_categories')

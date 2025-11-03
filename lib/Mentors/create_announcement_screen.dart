@@ -115,7 +115,6 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
 
   void _removeExistingFile(int index) async {
     String fileUrl = _existingFileUrls[index];
-
     setState(() {
       _existingFileUrls.removeAt(index);
     });

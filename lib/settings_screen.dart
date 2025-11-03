@@ -70,10 +70,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final themeNotifier = Provider.of<ThemeNotifier>(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text("Settings"),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+      appBar: AppBar(title: Text("Settings")
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),

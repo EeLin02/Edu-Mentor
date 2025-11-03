@@ -133,13 +133,19 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
       final cred = EmailAuthProvider.credential(email: user.email!, password: password);
       await user.reauthenticateWithCredential(cred);
       return true;
+    } on FirebaseAuthException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Reauthentication failed: ${e.message}")),
+      );
+      return false;
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Reauthentication failed.")),
+        SnackBar(content: Text("Reauthentication failed: $e")),
       );
       return false;
     }
   }
+
 
   Future<void> _updateEmail() async {
     final user = _auth.currentUser;
@@ -147,23 +153,64 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 
     final newEmail = emailController.text.trim();
     if (newEmail == user.email) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Email is unchanged')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Email is unchanged')),
+      );
       return;
     }
 
+    // Ask for password
     final password = await _askForCurrentPassword();
     if (password == null || password.isEmpty) return;
 
+    // Reauthenticate
     final success = await _reauthenticateUser(password);
     if (!success) return;
 
     try {
-      await user.updateEmail(newEmail);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Email updated')));
+      // Send verification email
+      await user.verifyBeforeUpdateEmail(newEmail);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Verification email sent to $newEmail. Please verify it to complete the change.',
+          ),
+        ),
+      );
+
+      // Optionally, **update Firestore immediately** with new email.
+      // If you want to wait until email is verified, move this to a cloud function trigger.
+      await _firestore.collection('students').doc(user.uid).update({
+        'email': newEmail,
+      });
+
+      print('✅ Firestore student email updated to $newEmail');
+
+    } on FirebaseAuthException catch (e) {
+      print('❌ Update email failed: $e');
+      String message;
+      switch (e.code) {
+        case 'invalid-email':
+          message = 'The email is invalid.';
+          break;
+        case 'email-already-in-use':
+          message = 'This email is already in use.';
+          break;
+        case 'requires-recent-login':
+          message = 'Please reauthenticate and try again.';
+          break;
+        default:
+          message = 'Failed to update email: ${e.code}';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Update failed')));
+      print('⚠️ Unknown error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('An unexpected error occurred.')),
+      );
     }
   }
+
 
   Future<void> _saveProfile() async {
     final user = _auth.currentUser;
@@ -211,7 +258,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text("Change Password"),
+        title: const Text("Change Password"),
         content: Form(
           key: formKey,
           child: Column(
@@ -220,19 +267,19 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
               TextFormField(
                 controller: currentPw,
                 obscureText: true,
-                decoration: InputDecoration(labelText: "Current Password"),
+                decoration: const InputDecoration(labelText: "Current Password"),
                 validator: (val) => val!.isEmpty ? "Required" : null,
               ),
               TextFormField(
                 controller: newPw,
                 obscureText: true,
-                decoration: InputDecoration(labelText: "New Password"),
-                validator: (val) => val!.length < 6 ? "Min 6 chars" : null,
+                decoration: const InputDecoration(labelText: "New Password"),
+                validator: (val) => val!.length < 6 ? "Minimum 6 characters" : null,
               ),
               TextFormField(
                 controller: confirmPw,
                 obscureText: true,
-                decoration: InputDecoration(labelText: "Confirm Password"),
+                decoration: const InputDecoration(labelText: "Confirm Password"),
                 validator: (val) =>
                 val != newPw.text ? "Passwords do not match" : null,
               ),
@@ -240,25 +287,61 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text("Cancel")),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
           ElevatedButton(
-            child: Text("Change"),
+            child: const Text("Change"),
             onPressed: () async {
-              if (formKey.currentState!.validate()) {
+              if (!formKey.currentState!.validate()) return;
+
+              // Reauthenticate first
+              final success = await _reauthenticateUser(currentPw.text.trim());
+              if (!success) return;
+
+              try {
+                await _auth.currentUser!.updatePassword(newPw.text.trim());
+
+                // Only close the dialog AFTER success
+                if (!mounted) return;
                 Navigator.pop(context);
-                final success = await _reauthenticateUser(currentPw.text.trim());
-                if (success) {
-                  await _auth.currentUser!.updatePassword(newPw.text.trim());
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text("Password changed")));
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("✅ Password changed successfully")),
+                );
+              } on FirebaseAuthException catch (e) {
+                String message;
+                switch (e.code) {
+                  case 'weak-password':
+                    message = 'The new password is too weak.';
+                    break;
+                  case 'requires-recent-login':
+                    message = 'Please reauthenticate and try again.';
+                    break;
+                  case 'operation-not-allowed':
+                    message = 'Password updates are not allowed. Enable Email/Password in Firebase.';
+                    break;
+                  default:
+                    message = 'Failed to change password: ${e.code}';
                 }
+
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+              } catch (e) {
+                print('⚠️ Unknown error: $e');
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('An unexpected error occurred.')));
               }
             },
-          )
+          ),
+
         ],
       ),
     );
   }
+
 
   Widget buildPhoneInput() {
     return Column(

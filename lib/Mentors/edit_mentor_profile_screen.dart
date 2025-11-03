@@ -145,12 +145,18 @@ class _EditMentorProfileScreenState extends State<EditMentorProfileScreen> {
     try {
       final user = _auth.currentUser;
       if (user == null) return false;
-
       final cred = EmailAuthProvider.credential(email: user.email!, password: password);
       await user.reauthenticateWithCredential(cred);
       return true;
     } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Reauthentication failed: ${e.message}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Reauthentication failed: ${e.message}")),
+      );
+      return false;
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Reauthentication failed: $e")),
+      );
       return false;
     }
   }
@@ -162,23 +168,61 @@ class _EditMentorProfileScreenState extends State<EditMentorProfileScreen> {
     if (user == null) return;
 
     if (newEmail == user.email) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Email is unchanged')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Email is unchanged')));
       return;
     }
 
+    // Ask for current password
     final currentPassword = await _askForCurrentPassword();
     if (currentPassword == null || currentPassword.isEmpty) return;
 
+    // Reauthenticate
     final reauthSuccess = await _reauthenticateUser(currentPassword);
     if (!reauthSuccess) return;
 
     try {
-      await user.updateEmail(newEmail);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Email updated successfully')));
+      // Send verification email to new address
+      await user.verifyBeforeUpdateEmail(newEmail);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Verification email sent to $newEmail. Please verify it to complete the change.'),
+        ),
+      );
+
+      // Update Firestore immediately (so dashboard shows the new email)
+      await _firestore.collection('mentors').doc(user.uid).update({
+        'email': newEmail,
+      });
+      print('✅ Firestore student email updated to $newEmail');
+
     } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update email: ${e.message}')));
+      print('❌ Update email failed: $e');
+      String message;
+      switch (e.code) {
+        case 'invalid-email':
+          message = 'The email is invalid.';
+          break;
+        case 'email-already-in-use':
+          message = 'This email is already in use.';
+          break;
+        case 'requires-recent-login':
+          message = 'Please reauthenticate and try again.';
+          break;
+        default:
+          message = 'Failed to update email: ${e.code}';
+      }
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+    } catch (e) {
+      print('⚠️ Unknown error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('An unexpected error occurred.')),
+      );
     }
   }
+
 
   Future<void> _saveProfile() async {
     final user = _auth.currentUser;
@@ -231,92 +275,97 @@ class _EditMentorProfileScreenState extends State<EditMentorProfileScreen> {
   }
 
   Future<void> _showChangePasswordDialog() async {
-    final currentPwController = TextEditingController();
-    final newPwController = TextEditingController();
-    final confirmPwController = TextEditingController();
-
+    final currentPw = TextEditingController();
+    final newPw = TextEditingController();
+    final confirmPw = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
     await showDialog(
       context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Change Password'),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: currentPwController,
-                    decoration: InputDecoration(labelText: 'Current Password'),
-                    obscureText: true,
-                    validator: (val) =>
-                    val == null || val.isEmpty ? 'Enter current password' : null,
-                  ),
-                  SizedBox(height: 10),
-                  TextFormField(
-                    controller: newPwController,
-                    decoration: InputDecoration(labelText: 'New Password'),
-                    obscureText: true,
-                    validator: (val) {
-                      if (val == null || val.isEmpty) return 'Enter new password';
-                      if (val.length < 6) return 'Password must be at least 6 characters';
-                      return null;
-                    },
-                  ),
-                  SizedBox(height: 10),
-                  TextFormField(
-                    controller: confirmPwController,
-                    decoration: InputDecoration(labelText: 'Confirm New Password'),
-                    obscureText: true,
-                    validator: (val) {
-                      if (val == null || val.isEmpty) return 'Confirm your new password';
-                      if (val != newPwController.text) return 'Passwords do not match';
-                      return null;
-                    },
-                  ),
-                ],
+      builder: (context) => AlertDialog(
+        title: const Text("Change Password"),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: currentPw,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: "Current Password"),
+                validator: (val) => val!.isEmpty ? "Required" : null,
               ),
-            ),
+              TextFormField(
+                controller: newPw,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: "New Password"),
+                validator: (val) => val!.length < 6 ? "Minimum 6 characters" : null,
+              ),
+              TextFormField(
+                controller: confirmPw,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: "Confirm Password"),
+                validator: (val) =>
+                val != newPw.text ? "Passwords do not match" : null,
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (formKey.currentState!.validate()) {
-                  final currentPassword = currentPwController.text.trim();
-                  final newPassword = newPwController.text.trim();
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            child: const Text("Change"),
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
 
-                  Navigator.of(context).pop(); // close dialog before processing
+              // Reauthenticate first
+              final success = await _reauthenticateUser(currentPw.text.trim());
+              if (!success) return;
 
-                  bool reauthSuccess = await _reauthenticateUser(currentPassword);
-                  if (!reauthSuccess) return;
+              try {
+                await _auth.currentUser!.updatePassword(newPw.text.trim());
 
-                  try {
-                    await _auth.currentUser!.updatePassword(newPassword);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Password updated successfully')),
-                    );
-                  } on FirebaseAuthException catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to update password: ${e.message}')),
-                    );
-                  }
+                // Only close the dialog AFTER success
+                if (!mounted) return;
+                Navigator.pop(context);
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("✅ Password changed successfully")),
+                );
+              } on FirebaseAuthException catch (e) {
+                String message;
+                switch (e.code) {
+                  case 'weak-password':
+                    message = 'The new password is too weak.';
+                    break;
+                  case 'requires-recent-login':
+                    message = 'Please reauthenticate and try again.';
+                    break;
+                  case 'operation-not-allowed':
+                    message = 'Password updates are not allowed. Enable Email/Password in Firebase.';
+                    break;
+                  default:
+                    message = 'Failed to change password: ${e.code}';
                 }
-              },
-              child: Text('Change Password'),
-            ),
-          ],
-        );
-      },
+
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+              } catch (e) {
+                print('⚠️ Unknown error: $e');
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('An unexpected error occurred.')));
+              }
+            },
+          ),
+        ],
+      ),
     );
   }
+
 
   void _pickBirthDate() async {
     final picked = await showDatePicker(

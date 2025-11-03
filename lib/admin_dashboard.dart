@@ -231,7 +231,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 _buildMenuTile(Icons.announcement_outlined, "Manage Notices",
                     "View, edit, or delete posted notices", () => _navigate(ManageNoticesScreen()), iconColor, textColor, subtitleColor),
                 _buildMenuTile(Icons.request_page, "Enrollment Requests",
-                    "Approve or reject subject enrollment requests", () => _navigate(EnrollmentRequestsScreen()), iconColor, textColor, subtitleColor),
+                    "Approve or reject subject enrollment requests", ()
+                    => _navigate(EnrollmentRequestsScreen()), iconColor, textColor, subtitleColor),
               ],
             ),
           ),

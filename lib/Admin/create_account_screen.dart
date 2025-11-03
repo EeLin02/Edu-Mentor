@@ -39,19 +39,28 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   String phoneNumber = '';
   bool isPhoneValid = false;
 
+  late VoidCallback _emailListener;
+
   @override
   void initState() {
     super.initState();
-    // Keep studentIdController in sync with email username
-    emailController.addListener(() {
+
+    _emailListener = () {
       if (selectedRole == 'Student') {
-        final emailText = emailController.text;
-        if (studentIdController.text != emailText) {
-          studentIdController.text = emailText;
+        final emailText = emailController.text.trim();
+        if (emailText.contains('@')) {
+          final studentId = emailText.split('@').first;
+          if (studentIdController.text != studentId) {
+            studentIdController.text = studentId;
+          }
         }
       }
-    });
+    };
+
+    emailController.addListener(_emailListener);
   }
+
+
 
   Future<void> pickFile() async {
     showModalBottomSheet(
@@ -105,15 +114,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     return snapshot.docs.isNotEmpty;
   }
 
-  String getFullEmail(String username) {
-    if (selectedRole == 'Student') {
-      return '$username@student.newinti.edu.my';
-    } else if (selectedRole == 'Mentor') {
-      return '$username@newinti.edu.my';
-    } else {
-      return username; // fallback
-    }
-  }
 
   Future<void> createAccount() async {
     if (!_formKey.currentState!.validate()) return;
@@ -144,7 +144,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     }
 
     try {
-      final fullEmail = getFullEmail(emailController.text.trim().toLowerCase());
+      final fullEmail = emailController.text.trim().toLowerCase();
 
       final UserCredential userCredential =
       await _auth.createUserWithEmailAndPassword(
@@ -440,10 +440,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
   String? validateStudentId(String? value) {
     if (value == null || value.isEmpty) return 'Enter student ID';
-    final pattern = RegExp(r'^[A-Za-z]{1}[0-9]{8}$');
-    if (!pattern.hasMatch(value)) return 'Student ID format: P + 8 digits';
-    return null;
+    return null; // ✅ no regex check
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -465,19 +464,11 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               // Email username
               TextFormField(
                 controller: emailController,
-                decoration: InputDecoration(
-                  labelText: "Email Username",
-                  suffixText: selectedRole == 'Student'
-                      ? '@student.newinti.edu.my'
-                      : selectedRole == 'Mentor'
-                      ? '@newinti.edu.my'
-                      : '',
-                ),
+                decoration: InputDecoration(labelText: "Email Username",),
                 validator: (value) {
-                  if (value == null || value.isEmpty) return 'Enter your email username';
-                  final fullEmail = getFullEmail(value);
-                  if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w]{2,4}$').hasMatch(fullEmail)) {
-                    return 'Enter a valid email';
+                  if (value == null || value.isEmpty) return 'Enter your email';
+                  if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w]{2,4}$').hasMatch(value)) {
+                    return 'Enter a valid email address';
                   }
                   return null;
                 },
@@ -519,6 +510,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                     selectedProgramme = null;
                     selectedProgrammeIds = [];
                   });
+                  // 🔹 Reattach listener dynamically after selecting Student
+                  emailController.removeListener(_emailListener);
+                  emailController.addListener(_emailListener);
                 },
                 validator: (value) => value == null ? 'Please select a role' : null,
               ),

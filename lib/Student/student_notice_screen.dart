@@ -222,6 +222,9 @@ class NoticeScreen extends StatelessWidget {
                             : 'No Timestamp',
                         style: const TextStyle(color: Colors.grey),
                       ),
+
+                      LatestCommentsWidget(noticeId: noticeId),
+
                       const Divider(),
 
                       // Like and Comment
@@ -368,7 +371,8 @@ class _LatestCommentsWidgetState extends State<LatestCommentsWidget> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) return Text('Error loading comments');
-        if (snapshot.connectionState == ConnectionState.waiting) return CircularProgressIndicator();
+        if (snapshot.connectionState == ConnectionState.waiting) return
+          CircularProgressIndicator();
 
         final comments = snapshot.data!.docs;
 

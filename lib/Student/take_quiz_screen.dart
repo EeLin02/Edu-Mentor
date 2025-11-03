@@ -390,6 +390,7 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
                             nextQuizAvailable)
                             ? widget.color
                             : Colors.grey,
+                        foregroundColor: Colors.white,
                         minimumSize: const Size.fromHeight(50),
                       ),
                       child: Text(

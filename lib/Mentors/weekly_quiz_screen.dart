@@ -229,7 +229,6 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
             const SizedBox(height: 16),
 
             // --- Publish Date ---
-            // --- Publish Date ---
             Row(
               children: [
                 Expanded(

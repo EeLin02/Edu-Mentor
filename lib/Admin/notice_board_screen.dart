@@ -193,7 +193,7 @@ class _NoticeBoardScreenState extends State<NoticeBoardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Notice Board',style: TextStyle(color: Colors.white),), backgroundColor: Colors.deepPurple),
+      appBar: AppBar(title: Text('Notice Board',style: TextStyle(color: Colors.white),), backgroundColor: Colors.deepPurple,foregroundColor: Colors.white,),
       body: Padding(
         padding: EdgeInsets.all(16.0),
         child: Form(

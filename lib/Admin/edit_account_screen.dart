@@ -8,7 +8,7 @@ import 'dart:io';
 import 'image_preview_screen.dart';
 
 class EditAccountScreen extends StatefulWidget {
-  final String userId;        // 👈 Add this
+  final String userId;
   final String role;
   final Map<String, dynamic> userData;
 
@@ -459,7 +459,7 @@ class _EditAccountScreenState extends State<EditAccountScreen> {
     final isDisabled = widget.userData['disabled'] == true;
 
     return Scaffold(
-      appBar: AppBar(title: Text('Edit Account'), backgroundColor: Colors.deepPurple),
+      appBar: AppBar(title: Text('Edit Account'), backgroundColor: Colors.deepPurple,foregroundColor: Colors.white,),
       body: Padding(
         padding: EdgeInsets.all(16),
         child: Form(

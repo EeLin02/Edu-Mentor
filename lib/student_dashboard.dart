@@ -51,11 +51,9 @@ class _StudentDashboardScreenState extends State<StudentDashboard> {
   }
 
   Future<void> _fetchEnrolledSections(String studentId) async {
-    if (studentId.isEmpty) return; // ✅ safeguard
-
+    if (studentId.isEmpty) return; // safeguard
     try {
       setState(() => isLoading = true);
-
       // 1. Load favorites (just for marking, not filtering)
       final favSnap = await _firestore
           .collection('studentFavorites')
@@ -63,7 +61,6 @@ class _StudentDashboardScreenState extends State<StudentDashboard> {
           .get();
 
       final favIds = Set<String>.from(favSnap.data()?['favorites'] ?? []);
-
       // 2. Load all enrollments for this student
       final enrollmentSnap = await _firestore
           .collection('subjectEnrollments')

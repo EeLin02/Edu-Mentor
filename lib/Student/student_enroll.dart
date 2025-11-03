@@ -134,7 +134,7 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
           .get();
 
 
-      // save student enrollment with names
+      // save student enrollment
       final docRef = _firestore
           .collection("subjectEnrollments")
           .doc("${widget.studentId}_$subjectId");
