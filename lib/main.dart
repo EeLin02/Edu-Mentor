@@ -77,26 +77,64 @@ void main() async {
   );
 
   if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-    print('✅ User granted permission');
+    print('User granted permission');
   } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
-    print('⚠️ User granted provisional permission');
+    print('User granted provisional permission');
   } else {
-    print('❌ User declined or has not accepted permission');
+    print('User declined or has not accepted permission');
   }
 
   // When app opened from notification
-  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-    if (message.data['announcementId'] != null) {
-      navigatorKey.currentState?.pushNamed(
-        '/studentAnnouncement',
-        arguments: {
-          "announcementId": message.data['announcementId'],
-          "color": Colors.teal, // or any default
-        },
-      );
+  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
+    print("Notification tapped: ${message.data}");
+
+    final route = message.data['route'];
+    final announcementId = message.data['announcementId'];
+
+    if (route == '/previewAnnouncement' && announcementId != null) {
+      final doc = await FirebaseFirestore.instance
+          .collection('announcements')
+          .doc(announcementId)
+          .get();
+
+      if (doc.exists) {
+        navigatorKey.currentState?.pushNamed(
+          '/previewAnnouncement',
+          arguments: {
+            "data": doc.data(),
+            "color": Colors.teal,
+          },
+        );
+      } else {
+        print(" Announcement not found in Firestore");
+      }
     }
   });
 
+  // When app launched from terminated state via notification
+  RemoteMessage? initialMessage =
+  await FirebaseMessaging.instance.getInitialMessage();
+  if (initialMessage != null) {
+    final route = initialMessage.data['route'];
+    final announcementId = initialMessage.data['announcementId'];
+
+    if (route == '/previewAnnouncement' && announcementId != null) {
+      final doc = await FirebaseFirestore.instance
+          .collection('announcements')
+          .doc(announcementId)
+          .get();
+
+      if (doc.exists) {
+        navigatorKey.currentState?.pushNamed(
+          '/previewAnnouncement',
+          arguments: {
+            "data": doc.data(),
+            "color": Colors.teal,
+          },
+        );
+      }
+    }
+  }
 
   // Foreground message listener
   FirebaseMessaging.onMessage.listen((RemoteMessage message) async {

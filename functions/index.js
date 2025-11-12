@@ -214,28 +214,53 @@ exports.notifySlaOnNewMessage = onDocumentCreated(
   }
 );
 
-exports.sendAnnouncementNotification = onDocumentCreated("announcements/{announcementId}", async (event) => {
-  const data = event.data.data();
+exports.sendAnnouncementNotification = onDocumentCreated(
+  "announcements/{announcementId}",
+  async (event) => {
+    const data = event.data.data();
+    const db = admin.firestore();
 
-  const title = data.title || "New Announcement";
-  const body = `${data.subjectName} - ${data.sectionName}`;
+    const title = data.title || "New Announcement";
+    const body = `${data.subjectName || "Subject"} - ${data.sectionName || "Section"}`;
 
-  // You would store FCM tokens under each student’s user doc
-  const tokensSnap = await admin.firestore()
-    .collection("students")
-    .where("sectionName", "==", data.sectionName)
-    .where("subjectName", "==", data.subjectName)
-    .get();
+    // 1 Get all subject enrollments for this subject and section
+    const enrollSnap = await db
+      .collection("subjectEnrollments")
+      .where("subjectId", "==", data.subjectId)
+      .where("sectionId", "==", data.sectionId)
+      .get();
 
-  const tokens = tokensSnap.docs
-    .map(doc => doc.data().fcmToken)
-    .filter(token => !!token);
+    if (enrollSnap.empty) {
+      console.log("No enrolled students found.");
+      return null;
+    }
 
-  if (tokens.length > 0) {
-    await admin.messaging().sendEachForMulticast({
-      tokens,
-      notification: { title, body },
-      data: { subjectName: data.subjectName, sectionName: data.sectionName }
+    // 2  Get each student's FCM token
+    const tokenPromises = enrollSnap.docs.map(async (doc) => {
+      const studentId = doc.data().studentId;
+      const studentDoc = await db.collection("students").doc(studentId).get();
+      if (!studentDoc.exists) return null;
+      return studentDoc.data().fcmToken || null;
     });
+
+    const tokens = (await Promise.all(tokenPromises)).filter((t) => !!t);
+
+    // 3 Send notifications with announcementId and route info
+    if (tokens.length > 0) {
+      await admin.messaging().sendEachForMulticast({
+        tokens,
+        notification: { title, body },
+        data: {
+          announcementId: event.params.announcementId, // important
+          route: "/previewAnnouncement",                // Flutter route
+        },
+      });
+
+      console.log(`Sent announcement to ${tokens.length} students`);
+    } else {
+      console.log("No valid tokens found.");
+    }
+
+    return null;
   }
-});
+);

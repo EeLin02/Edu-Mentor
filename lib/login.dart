@@ -29,7 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     try {
-      // Sign in with Firebase Authentication
+      //  Sign in with Firebase Authentication
       final userCredential = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
@@ -41,30 +41,38 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
+      // Force token refresh to ensure latest status
       final idTokenResult = await user.getIdTokenResult(true);
       final claims = idTokenResult.claims ?? {};
       print("Custom Claims: $claims");
 
-      // 🔹 Request FCM token
+      //  Request FCM token
       final fcm = FirebaseMessaging.instance;
       await fcm.requestPermission();
       final token = await fcm.getToken();
 
-      // 🔹 Check role by looking at Firestore collections
-      final userDocStudent = await FirebaseFirestore.instance
-          .collection('students')
-          .doc(user.uid)
-          .get();
+      //  Firestore reference
+      final firestore = FirebaseFirestore.instance;
 
-      if (userDocStudent.exists) {
-        // Student role
+      // STUDENT ROLE
+      final studentDoc = await firestore.collection('students').doc(user.uid).get();
+      if (studentDoc.exists) {
+        final data = studentDoc.data();
+        final isDisabled = data?['disabled'] ?? false;
+
+        if (isDisabled == true) {
+          _showError("This student account has been disabled. Please contact the administrator.");
+          await _auth.signOut();
+          return;
+        }
+
         if (token != null) {
-          await FirebaseFirestore.instance.collection('students').doc(user.uid)
-              .set(
+          await firestore.collection('students').doc(user.uid).set(
             {'fcmToken': token},
             SetOptions(merge: true),
           );
         }
+
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => StudentDashboard()),
@@ -72,19 +80,25 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      final userDocMentor = await FirebaseFirestore.instance
-          .collection('mentors')
-          .doc(user.uid)
-          .get();
+      // MENTOR ROLE
+      final mentorDoc = await firestore.collection('mentors').doc(user.uid).get();
+      if (mentorDoc.exists) {
+        final data = mentorDoc.data();
+        final isDisabled = data?['disabled'] ?? false;
 
-      if (userDocMentor.exists) {
-        // Mentor role
+        if (isDisabled == true) {
+          _showError("This mentor account has been disabled. Please contact the administrator.");
+          await _auth.signOut();
+          return;
+        }
+
         if (token != null) {
-          await FirebaseFirestore.instance.collection('mentors').doc(user.uid).set(
+          await firestore.collection('mentors').doc(user.uid).set(
             {'fcmToken': token},
             SetOptions(merge: true),
           );
         }
+
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => MentorDashboard()),
@@ -92,19 +106,16 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      final userDocAdmin = await FirebaseFirestore.instance
-          .collection('admins')
-          .doc(user.uid)
-          .get();
-
-      if (userDocAdmin.exists) {
-        // Admin role
+      // ADMIN ROLE
+      final adminDoc = await firestore.collection('admins').doc(user.uid).get();
+      if (adminDoc.exists) {
         if (token != null) {
-          await FirebaseFirestore.instance.collection('admins').doc(user.uid).set(
+          await firestore.collection('admins').doc(user.uid).set(
             {'fcmToken': token},
             SetOptions(merge: true),
           );
         }
+
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => AdminDashboard()),
@@ -112,8 +123,10 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      // ❌ No role assigned
-      _showError("No valid role assigned.");
+      // No valid role
+      _showError("No valid role assigned for this account.");
+      await _auth.signOut();
+
     } on FirebaseAuthException catch (e) {
       String errorMessage;
 
@@ -131,7 +144,6 @@ class _LoginScreenState extends State<LoginScreen> {
           errorMessage = "This account has been disabled. Please contact support.";
           break;
         case 'invalid-credential':
-        // Try to check if the email actually exists in Firestore (optional)
           final userExists = await _checkIfUserExists(email);
           if (userExists) {
             errorMessage = "Incorrect password. Please try again.";
@@ -139,16 +151,15 @@ class _LoginScreenState extends State<LoginScreen> {
             errorMessage = "No account found with this email address.";
           }
           break;
-
         default:
           errorMessage = "Login failed (${e.code}). Please try again.";
       }
       _showError(errorMessage);
-    }
-    catch (e) {
+    } catch (e) {
       _showError("Something went wrong: $e");
     }
   }
+
 
   Future<bool> _checkIfUserExists(String email) async {
     final users = ['students', 'mentors', 'admins'];
