@@ -417,46 +417,59 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
                                         ),
 
                                         const SizedBox(height: 6),
-                                        Row(
+                                        Wrap(
+                                          spacing: 8, // space between items horizontally
+                                          runSpacing: 4, // space between lines if wrapping
+                                          crossAxisAlignment: WrapCrossAlignment.center,
                                           children: [
-                                            Radio<String>(
-                                              activeColor: widget.color ??
-                                                  Colors.teal,
-                                              value: 'P',
-                                              groupValue: status,
-                                              onChanged: (val) {
-                                                setState(() {
-                                                  _attendance[id] = val!;
-                                                });
-                                              },
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Radio<String>(
+                                                  activeColor: widget.color ?? Colors.teal,
+                                                  value: 'P',
+                                                  groupValue: status,
+                                                  onChanged: (val) {
+                                                    setState(() {
+                                                      _attendance[id] = val!;
+                                                    });
+                                                  },
+                                                ),
+                                                const Text('Present'),
+                                              ],
                                             ),
-                                            const Text('Present'),
-                                            const SizedBox(width: 8),
-                                            Radio<String>(
-                                              activeColor: widget.color ??
-                                                  Colors.teal,
-                                              value: 'A',
-                                              groupValue: status,
-                                              onChanged: (val) {
-                                                setState(() {
-                                                  _attendance[id] = val!;
-                                                });
-                                              },
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Radio<String>(
+                                                  activeColor: widget.color ?? Colors.teal,
+                                                  value: 'A',
+                                                  groupValue: status,
+                                                  onChanged: (val) {
+                                                    setState(() {
+                                                      _attendance[id] = val!;
+                                                    });
+                                                  },
+                                                ),
+                                                const Text('Absent'),
+                                              ],
                                             ),
-                                            const Text('Absent'),
-                                            const SizedBox(width: 8),
-                                            Radio<String>(
-                                              activeColor: widget.color ??
-                                                  Colors.teal,
-                                              value: 'MC',
-                                              groupValue: status,
-                                              onChanged: (val) {
-                                                setState(() {
-                                                  _attendance[id] = val!;
-                                                });
-                                              },
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Radio<String>(
+                                                  activeColor: widget.color ?? Colors.teal,
+                                                  value: 'MC',
+                                                  groupValue: status,
+                                                  onChanged: (val) {
+                                                    setState(() {
+                                                      _attendance[id] = val!;
+                                                    });
+                                                  },
+                                                ),
+                                                const Text('MC'),
+                                              ],
                                             ),
-                                            const Text('MC'),
                                           ],
                                         ),
                                       ],

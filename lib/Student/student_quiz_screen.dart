@@ -129,26 +129,38 @@ class StudentQuizzesScreen extends StatelessWidget {
                                   style: const TextStyle(fontSize: 13),
                                 ),
                                 const SizedBox(height: 4),
-                                attempted
-                                    ? Chip(
-                                  label: Text("✅ Completed ($percentage%)"),
-                                  backgroundColor: Colors.green.shade100,
-                                  labelStyle: const TextStyle(color: Colors.green),
-                                )
 
-                                    : isAvailable
-                                    ? Chip(
-                                  label: const Text("❌ Not Attempted"),
-                                  backgroundColor: Colors.red.shade100,
-                                  labelStyle:
-                                  const TextStyle(color: Colors.red),
-                                )
-                                    : Chip(
-                                  label: const Text("⏳ Not yet available"),
-                                  backgroundColor: Colors.orange.shade100,
-                                  labelStyle:
-                                  const TextStyle(color: Colors.orange),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: attempted
+                                        ? Chip(
+                                      avatar: const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                                      label: Text("Completed ($percentage%)"),
+                                      backgroundColor: Colors.green.shade100,
+                                      labelStyle: const TextStyle(color: Colors.green),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                    )
+                                        : isAvailable
+                                        ? Chip(
+                                      avatar: const Icon(Icons.close_rounded, color: Colors.red, size: 18),
+                                      label: const Text("Not Attempted"),
+                                      backgroundColor: Colors.red.shade100,
+                                      labelStyle: const TextStyle(color: Colors.red),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                    )
+                                        : Chip(
+                                      avatar: const Icon(Icons.hourglass_empty, color: Colors.orange, size: 18),
+                                      label: const Text("Not yet available"),
+                                      backgroundColor: Colors.orange.shade100,
+                                      labelStyle: const TextStyle(color: Colors.orange),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                    ),
+                                  ),
                                 ),
+
                               ],
                             ),
                             trailing: isAvailable

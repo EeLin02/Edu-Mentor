@@ -182,7 +182,7 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
             const SizedBox(height: 12),
 
 
-            // 🔹 Category Dropdown from Firestore
+            // Category Dropdown from Firestore
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection("quizCategories")
@@ -967,7 +967,7 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
 
               var quizzes = snapshot.data!.docs;
 
-              // ✅ Apply search filter
+              //  Apply search filter
               quizzes = quizzes.where((doc) {
                 final title = (doc.data() as Map<String, dynamic>)["title"]
                     ?.toString()
@@ -976,7 +976,7 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
                 return title.contains(_searchQuery);
               }).toList();
 
-              // ✅ Apply category filter
+              //  Apply category filter
               if (_filterCategory != "All") {
                 quizzes = quizzes.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
@@ -989,7 +989,7 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
                 return const Center(child: Text("No quizzes found"));
               }
 
-              // 🔹 Show quiz list
+              //  Show quiz list
               return ListView(
                 children: quizzes.map((quiz) {
                   final data = quiz.data() as Map<String, dynamic>;
@@ -1013,6 +1013,8 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
                           builder: (_) => QuizSubmissionsScreen(
                             quizId: quiz.id,
                             quizTitle: title,
+                            subjectId: widget.subjectId,
+                            sectionId: widget.sectionId,
                           ),
                         ),
                       );
@@ -1032,12 +1034,18 @@ class _WeeklyQuizScreenState extends State<WeeklyQuizScreen>
 class QuizSubmissionsScreen extends StatefulWidget {
   final String quizId;
   final String quizTitle;
+  final String subjectId;
+  final String sectionId;
+
 
   const QuizSubmissionsScreen({
-    super.key,
+    Key? key,
     required this.quizId,
     required this.quizTitle,
-  });
+    required this.subjectId,
+    required this.sectionId,
+  }) : super(key: key);
+
 
   @override
   State<QuizSubmissionsScreen> createState() => _QuizSubmissionsScreenState();
@@ -1045,6 +1053,43 @@ class QuizSubmissionsScreen extends StatefulWidget {
 
 class _QuizSubmissionsScreenState extends State<QuizSubmissionsScreen> {
   String _searchQuery = "";
+
+  Future<List<QueryDocumentSnapshot>> _getValidSubmissions(
+      List<QueryDocumentSnapshot> submissions) async {
+    final firestore = FirebaseFirestore.instance;
+
+    // Run all checks in parallel
+    final results = await Future.wait(
+      submissions.map((sub) async {
+        final studentId = sub["studentId"];
+        if (studentId == null) return null;
+
+        // Fetch student & enrollment checks in parallel
+        final studentFuture =
+        firestore.collection("students").doc(studentId).get();
+        final enrollFuture = firestore
+            .collection("subjectEnrollments")
+            .where("studentId", isEqualTo: studentId)
+            .where("subjectId", isEqualTo: widget.subjectId)
+            .where("sectionId", isEqualTo: widget.sectionId)
+            .get();
+
+        final studentDoc = await studentFuture;
+        final enrollSnap = await enrollFuture;
+
+        // Keep only valid (existing + enrolled) students
+        if (studentDoc.exists && enrollSnap.docs.isNotEmpty) {
+          return sub;
+        } else {
+          return null;
+        }
+      }),
+    );
+
+    // Filter out nulls (invalid students)
+    return results.whereType<QueryDocumentSnapshot>().toList();
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -1064,40 +1109,86 @@ class _QuizSubmissionsScreenState extends State<QuizSubmissionsScreen> {
 
           final submissions = snapshot.data!.docs;
 
-          if (submissions.isEmpty) {
-            return const Center(child: Text("No submissions yet"));
-          }
-
-          // 📊 Calculate summary
-          final scores = submissions.map((s) => (s["score"] ?? 0) as int).toList();
-          final highest = scores.isNotEmpty ? scores.reduce((a, b) => a > b ? a : b) : 0;
-          final lowest = scores.isNotEmpty ? scores.reduce((a, b) => a < b ? a : b) : 0;
-          final average = scores.isNotEmpty
-              ? scores.reduce((a, b) => a + b) / scores.length
-              : 0.0;
-
           return Column(
             children: [
               // --- Summary Card ---
-              Card(
-                margin: const EdgeInsets.all(12),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("📊 Quiz Summary",
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      Text("👥 Participants: ${submissions.length}"),
-                      Text("🏆 Highest Score: $highest"),
-                      Text("📉 Lowest Score: $lowest"),
-                      Text("📊 Average Score: ${average.toStringAsFixed(2)}"),
-                    ],
-                  ),
-                ),
-              ),
+              FutureBuilder<List<QueryDocumentSnapshot>>(
+                future: _getValidSubmissions(submissions),
+                builder: (context, validSnap) {
+                  if (!validSnap.hasData) {
+                    return const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
 
+                  final validSubs = validSnap.data!;
+                  // If no valid enrolled submissions, show zeros
+                  final scores = validSubs.isNotEmpty
+                      ? validSubs.map((s) => (s["score"] ?? 0) as int).toList()
+                      : <int>[];
+
+                  final highest =
+                  scores.isNotEmpty ? scores.reduce((a, b) => a > b ? a : b) : 0;
+                  final lowest =
+                  scores.isNotEmpty ? scores.reduce((a, b) => a < b ? a : b) : 0;
+                  final average =
+                  scores.isNotEmpty ? scores.reduce((a, b) => a + b) / scores.length : 0.0;
+
+                  return InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => QuizStatsDetailScreen(
+                            quizId: widget.quizId,
+                            quizTitle: widget.quizTitle,
+                          ),
+                        ),
+                      );
+                    },
+                    child: Card(
+                      margin: const EdgeInsets.all(12),
+                      elevation: 3,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: const [
+                                Icon(Icons.bar_chart, color: Colors.teal),
+                                SizedBox(width: 8),
+                                Text(
+                                  "Quiz Summary",
+                                  style:
+                                  TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text("👥 Participants: ${validSubs.length}"),
+                            Text("🏆 Highest Score: $highest"),
+                            Text("📉 Lowest Score: $lowest"),
+                            Text("📊 Average Score: ${average.toStringAsFixed(2)}"),
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                "Tap to view details →",
+                                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
               // --- Search bar ---
               Padding(
                 padding: const EdgeInsets.all(8.0),
@@ -1121,61 +1212,90 @@ class _QuizSubmissionsScreenState extends State<QuizSubmissionsScreen> {
                     final sub = submissions[i];
                     final studentId = sub["studentId"];
 
-                    return FutureBuilder<DocumentSnapshot>(
+                    return FutureBuilder<QuerySnapshot>(
                       future: FirebaseFirestore.instance
-                          .collection("students")
-                          .doc(studentId)
+                          .collection("subjectEnrollments")
+                          .where("studentId", isEqualTo: studentId)
+                          .where("subjectId", isEqualTo: widget.subjectId) // ✅ from parent
+                          .where("sectionId", isEqualTo: widget.sectionId) // ✅ from parent
                           .get(),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData) {
+                      builder: (context, enrollSnap) {
+                        if (!enrollSnap.hasData) {
                           return const ListTile(
                             leading: CircleAvatar(child: Icon(Icons.person)),
                             title: Text("Loading student..."),
                           );
                         }
 
-                        if (!snapshot.data!.exists) {
-                          return const ListTile(
-                            leading: CircleAvatar(child: Icon(Icons.error)),
-                            title: Text("Student not found"),
-                          );
-                        }
-
-                        final student = snapshot.data!.data() as Map<String, dynamic>;
-                        final name = student["name"] ?? "Unknown";
-                        final profileUrl = student["profileUrl"];
-                        final studentIdNo = student["studentIdNo"] ?? "";
-
-                        // 🔹 Filter based on search
-                        if (_searchQuery.isNotEmpty &&
-                            !name.toLowerCase().contains(_searchQuery)) {
+                        //  Skip if student is not currently enrolled
+                        if (enrollSnap.data!.docs.isEmpty) {
                           return const SizedBox.shrink();
                         }
 
-                        return ListTile(
-                          leading: CircleAvatar(
-                            backgroundImage: profileUrl != null && profileUrl.isNotEmpty
-                                ? NetworkImage(profileUrl)
-                                : null,
-                            child: (profileUrl == null || profileUrl.isEmpty)
-                                ? const Icon(Icons.person)
-                                : null,
-                          ),
-                          title: Text(name),
-                          subtitle: Text(
-                            "ID: $studentIdNo • Score: ${sub["score"] ?? 0}/${sub["total"] ?? 0}\n"
-                                "Submitted: ${sub["submittedAt"].toDate()}",
-                          ),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => SubmissionDetailScreen(
-                                  quizTitle: widget.quizTitle,
-                                  submissionId: sub.id,
-                                  quizId: widget.quizId,
-                                ),
+                        //  If enrolled, fetch student details
+                        return FutureBuilder<DocumentSnapshot>(
+                          future: FirebaseFirestore.instance
+                              .collection("students")
+                              .doc(studentId)
+                              .get(),
+                          builder: (context, studentSnap) {
+                            if (!studentSnap.hasData) {
+                              return const ListTile(
+                                leading: CircleAvatar(
+                                    child: Icon(Icons.person)),
+                                title: Text("Loading student..."),
+                              );
+                            }
+
+                            if (!studentSnap.data!.exists) {
+                              return const ListTile(
+                                leading: CircleAvatar(child: Icon(Icons.error)),
+                                title: Text("Student not found"),
+                              );
+                            }
+
+                            final student =
+                            studentSnap.data!.data() as Map<String, dynamic>;
+                            final name = student["name"] ?? "Unknown";
+                            final profileUrl = student["profileUrl"];
+                            final studentIdNo = student["studentIdNo"] ?? "";
+
+                            // 🔹 Filter based on search
+                            if (_searchQuery.isNotEmpty &&
+                                !name.toLowerCase().contains(_searchQuery)) {
+                              return const SizedBox.shrink();
+                            }
+
+                            return ListTile(
+                              leading: CircleAvatar(
+                                backgroundImage: profileUrl != null &&
+                                    profileUrl.isNotEmpty
+                                    ? NetworkImage(profileUrl)
+                                    : null,
+                                child: (profileUrl == null ||
+                                    profileUrl.isEmpty)
+                                    ? const Icon(Icons.person)
+                                    : null,
                               ),
+                              title: Text(name),
+                              subtitle: Text(
+                                "ID: $studentIdNo • Score: ${sub["score"] ??
+                                    0}/${sub["total"] ?? 0}\n"
+                                    "Submitted: ${sub["submittedAt"].toDate()}",
+                              ),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        SubmissionDetailScreen(
+                                          quizTitle: widget.quizTitle,
+                                          submissionId: sub.id,
+                                          quizId: widget.quizId,
+                                        ),
+                                  ),
+                                );
+                              },
                             );
                           },
                         );
@@ -1191,7 +1311,6 @@ class _QuizSubmissionsScreenState extends State<QuizSubmissionsScreen> {
     );
   }
 }
-
 
 class QuizStatsDetailScreen extends StatefulWidget {
   final String quizId;
@@ -1210,6 +1329,43 @@ class QuizStatsDetailScreen extends StatefulWidget {
 class _QuizStatsDetailScreenState extends State<QuizStatsDetailScreen> {
   String _selectedChart = "Bar Chart"; // default chart type
 
+  ///  Helper to get only valid (enrolled) student submissions
+  Future<List<QueryDocumentSnapshot>> _getValidSubmissions(
+      List<QueryDocumentSnapshot> submissions) async {
+    final firestore = FirebaseFirestore.instance;
+    final quizDoc = await firestore.collection("quizzes").doc(widget.quizId).get();
+    final quizData = quizDoc.data();
+
+    if (quizData == null) return [];
+
+    final subjectId = quizData["subjectId"];
+    final sectionId = quizData["sectionId"];
+
+    final results = await Future.wait(
+      submissions.map((sub) async {
+        final studentId = sub["studentId"];
+        if (studentId == null) return null;
+
+        // Check student exists and is still enrolled
+        final studentDoc =
+        await firestore.collection("students").doc(studentId).get();
+        final enrollSnap = await firestore
+            .collection("subjectEnrollments")
+            .where("studentId", isEqualTo: studentId)
+            .where("subjectId", isEqualTo: subjectId)
+            .where("sectionId", isEqualTo: sectionId)
+            .get();
+
+        if (studentDoc.exists && enrollSnap.docs.isNotEmpty) {
+          return sub;
+        }
+        return null;
+      }),
+    );
+
+    return results.whereType<QueryDocumentSnapshot>().toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1226,80 +1382,135 @@ class _QuizStatsDetailScreenState extends State<QuizStatsDetailScreen> {
           }
 
           final submissions = snapshot.data!.docs;
-          if (submissions.isEmpty) {
-            return const Center(child: Text("No submissions yet"));
-          }
 
-          final scores = submissions.map((s) => (s["score"] ?? 0) as int).toList();
+          return FutureBuilder<List<QueryDocumentSnapshot>>(
+            future: _getValidSubmissions(submissions),
+            builder: (context, validSnap) {
+              if (!validSnap.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-          // Stats
-          final highest = scores.reduce((a, b) => a > b ? a : b);
-          final lowest = scores.reduce((a, b) => a < b ? a : b);
-          final average = scores.reduce((a, b) => a + b) / scores.length;
+              final validSubs = validSnap.data!;
+              final hasData = validSubs.isNotEmpty;
 
-          // Group counts
-          final group0to2 = scores.where((s) => s >= 0 && s <= 2).length;
-          final group3to5 = scores.where((s) => s >= 3 && s <= 5).length;
-          final group6to8 = scores.where((s) => s >= 6 && s <= 8).length;
-          final group9to10 = scores.where((s) => s >= 9 && s <= 10).length;
+              //  Stats only from valid submissions
+              final scores = hasData
+                  ? validSubs.map((s) => (s["score"] ?? 0) as int).toList()
+                  : <int>[];
 
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              // --- Stats Card ---
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              final highest =
+              hasData ? scores.reduce((a, b) => a > b ? a : b) : 0;
+              final lowest =
+              hasData ? scores.reduce((a, b) => a < b ? a : b) : 0;
+              final average = hasData
+                  ? scores.reduce((a, b) => a + b) / scores.length
+                  : 0.0;
+
+              final group0to2 =
+              hasData ? scores.where((s) => s >= 0 && s <= 2).length : 0;
+              final group3to5 =
+              hasData ? scores.where((s) => s >= 3 && s <= 5).length : 0;
+              final group6to8 =
+              hasData ? scores.where((s) => s >= 6 && s <= 8).length : 0;
+              final group9to10 =
+              hasData ? scores.where((s) => s >= 9 && s <= 10).length : 0;
+
+              return ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  // --- Stats Card ---
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 20),
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.bar_chart, color: Colors.teal),
+                              SizedBox(width: 8),
+                              Text(
+                                "Quiz Summary",
+                                style: TextStyle(
+                                    fontSize: 16, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text("👥 Participants: ${validSubs.length}"),
+                          Text("🏆 Highest: $highest"),
+                          Text("📉 Lowest: $lowest"),
+                          Text("📊 Average: ${average.toStringAsFixed(2)}"),
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              hasData
+                                  ? "Tap chart below for details"
+                                  : "No valid (enrolled) submissions",
+                              style: TextStyle(
+                                  color: Colors.grey[600], fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // --- Dropdown for chart selection ---
+                  Row(
                     children: [
-                      Text("👥 Participants: ${submissions.length}"),
-                      Text("🏆 Highest: $highest"),
-                      Text("📉 Lowest: $lowest"),
-                      Text("📊 Average: ${average.toStringAsFixed(2)}"),
+                      const Text("Select Chart: "),
+                      const SizedBox(width: 10),
+                      DropdownButton<String>(
+                        value: _selectedChart,
+                        items: const [
+                          DropdownMenuItem(
+                              value: "Bar Chart", child: Text("Bar Chart")),
+                          DropdownMenuItem(
+                              value: "Pie Chart", child: Text("Pie Chart")),
+                          DropdownMenuItem(
+                              value: "Line Chart", child: Text("Line Chart")),
+                        ],
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedChart = val!;
+                          });
+                        },
+                      ),
                     ],
                   ),
-                ),
-              ),
 
-              const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-              // --- Dropdown for chart selection ---
-              Row(
-                children: [
-                  const Text("Select Chart: "),
-                  const SizedBox(width: 10),
-                  DropdownButton<String>(
-                    value: _selectedChart,
-                    items: const [
-                      DropdownMenuItem(value: "Bar Chart", child: Text("Bar Chart")),
-                      DropdownMenuItem(value: "Pie Chart", child: Text("Pie Chart")),
-                      DropdownMenuItem(value: "Line Chart", child: Text("Line Chart")),
-                    ],
-                    onChanged: (val) {
-                      setState(() {
-                        _selectedChart = val!;
-                      });
-                    },
+                  // --- Chart or Placeholder ---
+                  SizedBox(
+                    height: 300,
+                    child: hasData
+                        ? _buildChart(
+                      _selectedChart,
+                      group0to2,
+                      group3to5,
+                      group6to8,
+                      group9to10,
+                      scores,
+                    )
+                        : const Center(
+                      child: Text(
+                        "No data to display yet",
+                        style: TextStyle(
+                            color: Colors.grey, fontSize: 14),
+                      ),
+                    ),
                   ),
                 ],
-              ),
-
-              const SizedBox(height: 20),
-
-              // --- Render chart based on selection ---
-              SizedBox(
-                height: 300,
-                child: _buildChart(
-                  _selectedChart,
-                  group0to2,
-                  group3to5,
-                  group6to8,
-                  group9to10,
-                  scores,
-                ),
-              ),
-            ],
+              );
+            },
           );
         },
       ),
@@ -1349,17 +1560,21 @@ class _QuizStatsDetailScreenState extends State<QuizStatsDetailScreen> {
         return BarChart(
           BarChartData(
             alignment: BarChartAlignment.spaceAround,
-            maxY: (scores.length.toDouble() + 1),
+            maxY: (scores.isNotEmpty ? scores.length.toDouble() + 1 : 1),
             titlesData: FlTitlesData(
               bottomTitles: AxisTitles(
                 sideTitles: SideTitles(
                   showTitles: true,
                   getTitlesWidget: (value, meta) {
                     switch (value.toInt()) {
-                      case 0: return const Text("0-2");
-                      case 1: return const Text("3-5");
-                      case 2: return const Text("6-8");
-                      case 3: return const Text("9-10");
+                      case 0:
+                        return const Text("0-2");
+                      case 1:
+                        return const Text("3-5");
+                      case 2:
+                        return const Text("6-8");
+                      case 3:
+                        return const Text("9-10");
                     }
                     return const Text("");
                   },

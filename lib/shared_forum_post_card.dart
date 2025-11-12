@@ -74,37 +74,70 @@ class ForumPostCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ListTile(
-              leading: CircleAvatar(
-                backgroundImage: userPhoto.isNotEmpty ? NetworkImage(userPhoto) : null,
-                child: userPhoto.isEmpty ? Icon(Icons.person) : null,
-              ),
-              title: Text('$userName ($userIdNo)'),
-              subtitle: Text(data['text'], style: TextStyle(fontSize: 15)),
-              trailing: showDelete
-                  ? PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'delete') {
-                    _deletePost(context, data.id);
-                  } else if (value == 'edit') {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => EditForumPostScreen(
-                          postId: data.id,
-                          initialText: data['text'],
-                        ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Profile Picture
+                CircleAvatar(
+                  radius: 22,
+                  backgroundImage: userPhoto.isNotEmpty ? NetworkImage(userPhoto) : null,
+                  child: userPhoto.isEmpty ? const Icon(Icons.person) : null,
+                ),
+                const SizedBox(width: 10),
+
+                // Name + ID + Text (left-aligned)
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '$userName ($userIdNo)',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (showDelete)
+                            PopupMenuButton<String>(
+                              onSelected: (value) {
+                                if (value == 'delete') {
+                                  _deletePost(context, data.id);
+                                } else if (value == 'edit') {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => EditForumPostScreen(
+                                        postId: data.id,
+                                        initialText: data['text'],
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                                const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                              ],
+                            ),
+                        ],
                       ),
-                    );
-                  }
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(value: 'edit', child: Text('Edit')),
-                  PopupMenuItem(value: 'delete', child: Text('Delete')),
-                ],
-              )
-                  : null,
+                      const SizedBox(height: 4),
+                      Text(
+                        data['text'],
+                        style: const TextStyle(fontSize: 15),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
+
             Align(
               alignment: Alignment.centerRight,
               child: Text(

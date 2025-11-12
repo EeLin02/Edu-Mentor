@@ -285,17 +285,15 @@ class _AssignMentorScreenState extends State<AssignMentorScreen> {
     super.dispose();
   }
 
-  // --------------------------
   // Build UI
-  // --------------------------
   Widget _buildSelectBox({
     required String label,
     required String value,
     required VoidCallback onTap,
-    bool disabled = false,   // add disabled flag
+    bool disabled = false,
   }) {
     return GestureDetector(
-      onTap: disabled ? null : onTap,   //  prevent tapping if disabled
+      onTap: disabled ? null : onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
         margin: const EdgeInsets.symmetric(vertical: 8),
@@ -305,20 +303,26 @@ class _AssignMentorScreenState extends State<AssignMentorScreen> {
             width: 1.2,
           ),
           borderRadius: BorderRadius.circular(8),
-          color: disabled ? Colors.grey.shade200 : Colors.white, //  grey out bg
+          color: disabled ? Colors.grey.shade200 : Colors.white,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              value.isNotEmpty ? value : label,
-              style: TextStyle(
-                fontSize: 16,
-                color: disabled
-                    ? Colors.grey
-                    : (value.isNotEmpty ? Colors.black : Colors.grey.shade600),
+            //  This Expanded + Text fixes overflow
+            Expanded(
+              child: Text(
+                value.isNotEmpty ? value : label,
+                overflow: TextOverflow.ellipsis, // truncate long text
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: disabled
+                      ? Colors.grey
+                      : (value.isNotEmpty ? Colors.black : Colors.grey.shade600),
+                ),
               ),
             ),
+            const SizedBox(width: 8),
             Icon(
               Icons.arrow_drop_down,
               color: disabled ? Colors.grey : Colors.black,
@@ -328,6 +332,7 @@ class _AssignMentorScreenState extends State<AssignMentorScreen> {
       ),
     );
   }
+
 
 
   // When user toggles checkbox we must keep both selectedSectionsBySubject and sectionLimitsBySubject consistent
@@ -588,6 +593,7 @@ class _AssignMentorScreenState extends State<AssignMentorScreen> {
                                       final controller = _limitControllers[subjectId]![secId]!;
 
                                       return Row(
+                                        crossAxisAlignment: CrossAxisAlignment.center,
                                         children: [
                                           Checkbox(
                                             value: isSelected,
@@ -595,13 +601,26 @@ class _AssignMentorScreenState extends State<AssignMentorScreen> {
                                               _toggleSectionSelection(subjectId, secId, checked ?? false);
                                             },
                                           ),
-                                          Expanded(child: Text(secName)),
+                                          // Section name should truncate if too long
+                                          Expanded(
+                                            flex: 3,
+                                            child: Text(
+                                              secName,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(fontSize: 15),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+
                                           SizedBox(
-                                            width: 80,
+                                            width: 70,
                                             child: TextFormField(
                                               controller: controller,
                                               keyboardType: TextInputType.number,
-                                              decoration: InputDecoration(hintText: "Limit"),
+                                              decoration: const InputDecoration(
+                                                hintText: "Limit",
+                                                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              ),
                                               onChanged: (val) {
                                                 final num = int.tryParse(val) ?? 0;
                                                 setState(() {
@@ -611,8 +630,12 @@ class _AssignMentorScreenState extends State<AssignMentorScreen> {
                                               },
                                             ),
                                           ),
-                                          SizedBox(width: 10),
-                                          Text("/ $totalStudentsInProgramme"),
+                                          const SizedBox(width: 6),
+                                          //Total student count,constrained
+                                          Flexible(child:
+                                          Text("/ $totalStudentsInProgramme",
+                                      overflow: TextOverflow.ellipsis,
+                                      ),),
                                         ],
                                       );
                                     }).toList(),

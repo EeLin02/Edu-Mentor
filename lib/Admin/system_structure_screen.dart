@@ -36,7 +36,7 @@ class _SystemStructureScreenState extends State<SystemStructureScreen> {
             ),
             _DashboardCard(
               title: "CREATE PROGRAMME",
-              subtitle: "Add and Manage Programmes (via Schools)",
+              subtitle: "Add and Manage Programmes",
               icon: Icons.school_outlined,
               onTap: () {
                 // 👇 Always go through ManageSchoolsScreen first
@@ -122,14 +122,19 @@ class _DashboardCard extends StatelessWidget {
           padding: const EdgeInsets.all(16.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, size: 40, color: Colors.blue),
+              Flexible(child:
               Text(title,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  maxLines: 2,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),),
+              Flexible(child:
               Text(subtitle,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                  maxLines: 3,
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600])),),
             ],
           ),
         ),
