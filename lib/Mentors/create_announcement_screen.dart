@@ -8,23 +8,28 @@ import 'package:path/path.dart' as path;
 import 'package:firebase_auth/firebase_auth.dart';
 
 class CreateAnnouncementScreen extends StatefulWidget {
-  final String? subjectId;
-  final String? subjectName;
-  final String? sectionId;
-  final String? sectionName;
+  final String schoolId;
+  final String programmeId;
+  final String subjectId;
+  final String sectionId;
+
+  final String subjectName;
+  final String sectionName;
   final String? announcementId;
   final String? title;
   final String? description;
-  final List<dynamic>? files; // URLs
+  final List<dynamic>? files;
   final List<String>? externalLinks;
   final Color? color;
 
 
   const CreateAnnouncementScreen({
-    Key? key,
+    super.key,
+    required this.schoolId,
+    required this.programmeId,
     required this.subjectId,
-    required this.subjectName,
     required this.sectionId,
+    required this.subjectName,
     required this.sectionName,
     this.announcementId,
     this.title,
@@ -32,7 +37,8 @@ class CreateAnnouncementScreen extends StatefulWidget {
     this.files,
     this.externalLinks,
     this.color,
-  }) : super(key: key);
+  });
+
 
   @override
   State<CreateAnnouncementScreen> createState() => _CreateAnnouncementScreenState();
@@ -179,8 +185,10 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
     final fileUrls = [..._existingFileUrls, ...newFileUrls];
 
     final data = {
-      'subjectId': widget.subjectId ?? '',
-      'sectionId': widget.sectionId ?? '',
+      'schoolId': widget.schoolId,
+      'programmeId': widget.programmeId,
+      'subjectId': widget.subjectId,
+      'sectionId': widget.sectionId,
       'title': title,
       'description': description,
       'files': fileUrls,
@@ -188,6 +196,8 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
       'timestamp': FieldValue.serverTimestamp(),
       'mentorsId': uid,
     };
+
+
 
     if (widget.announcementId != null) {
       // Update existing

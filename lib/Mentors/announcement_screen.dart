@@ -57,6 +57,8 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
 
   void _editAnnouncement(
       DocumentSnapshot doc,
+      String schoolId,
+      String programmeId,
       String subjectId,
       String subjectName,
       String sectionId,
@@ -69,6 +71,8 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
       context,
       '/createAnnouncement',
       arguments: {
+        'schoolId': schoolId,
+        'programmeId': programmeId,
         'subjectId': subjectId,
         'subjectName': subjectName,
         'sectionId': sectionId,
@@ -153,24 +157,18 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                         tooltip: 'Edit',
                         icon: Icon(Icons.edit, color: Colors.blueGrey),
                         onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => CreateAnnouncementScreen(
-                                subjectId: args['subjectId'] ?? '',
-                                subjectName: subjectName,
-                                sectionId: args['sectionId'] ?? '',
-                                sectionName: sectionName,
-                                announcementId: doc.id,
-                                title: data['title'],
-                                description: data['description'],
-                                files: data['files'] ?? [],
-                                externalLinks: List<String>.from(data['externalLinks'] ?? []),
-                                color: color,
-                              ),
-                            ),
+                          _editAnnouncement(
+                            doc,
+                            args['schoolId'],
+                            args['programmeId'],
+                            args['subjectId'],
+                            subjectName,
+                            args['sectionId'],
+                            sectionName,
+                            color,
                           );
                         },
+
                       ),
 
                       IconButton(
@@ -202,6 +200,8 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
             context,
             '/createAnnouncement',
             arguments: {
+              'schoolId': args['schoolId'],
+              'programmeId': args['programmeId'],
               'subjectId': args['subjectId'],
               'subjectName': subjectName,
               'sectionId': args['sectionId'],
@@ -209,6 +209,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
               'color': color,
             },
           );
+
         },
         child: Icon(Icons.add),
         tooltip: 'Create new announcement',

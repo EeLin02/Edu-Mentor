@@ -11,22 +11,21 @@ import 'dart:io';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:mime/mime.dart';
 
-
-class PrivateChatScreen extends StatefulWidget {
+class StudentPrivateChatScreen extends StatefulWidget {
   final String mentorId;
   final String mentorName;
 
-  const PrivateChatScreen({
-    super.key,
+  const StudentPrivateChatScreen({
     required this.mentorId,
     required this.mentorName,
-  });
+    Key? key,
+  }) : super(key: key);
 
   @override
-  State<PrivateChatScreen> createState() => _PrivateChatScreenState();
+  State<StudentPrivateChatScreen> createState() => _StudentPrivateChatScreenState();
 }
 
-class _PrivateChatScreenState extends State<PrivateChatScreen> {
+class _StudentPrivateChatScreenState extends State<StudentPrivateChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
@@ -49,7 +48,8 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
     super.initState();
     _loadMuteStatus();
     studentId = FirebaseAuth.instance.currentUser!.uid;
-    _createChatIfNotExists();
+
+    _initChat();
     _statusStream = FirebaseFirestore.instance
         .collection('mentors')
         .doc(widget.mentorId)
@@ -61,6 +61,13 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
         });
       }
     });
+  }
+
+  Future<void> _initChat() async {
+    await _createChatIfNotExists();   // ENSURES chatDoc exists
+    await _loadMuteStatus();
+
+    setState(() {}); // Rebuild UI safely
   }
 
   String get chatId {
@@ -636,6 +643,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
+    await _createChatIfNotExists();
 
     await messageCollection.add({
       'text': text,
@@ -688,6 +696,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
         final downloadUrl = await ref.getDownloadURL();
         final mimeType = lookupMimeType(pickedFile.path) ??
             'application/octet-stream';
+        await _createChatIfNotExists();
 
         await messageCollection.add({
           'fileUrl': downloadUrl,
@@ -786,7 +795,7 @@ class ChatSearchDelegate extends SearchDelegate<String?> {
 
     final matchDoc = results[_currentMatchIndex];
     final key = (scrollController.position.context.storageContext as Element)
-        .findAncestorStateOfType<_PrivateChatScreenState>()!
+        .findAncestorStateOfType<_StudentPrivateChatScreenState>()!
         .messageKeys[matchDoc.id];
 
     if (key?.currentContext != null) {

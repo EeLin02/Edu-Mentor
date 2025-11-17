@@ -114,7 +114,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
 
     await messageCollection.add({
       'text': text,
-      'senderId': widget.mentorId,
+      'senderId': FirebaseAuth.instance.currentUser!.uid,
       'senderRole': "mentor",     //  mark role
       'mentorId': widget.mentorId,
       'studentId': widget.studentId,
@@ -925,7 +925,7 @@ void _requestPermission() async {
           'fileUrl': downloadUrl,
           'fileName': fileName,
           'fileType': mimeType,
-          'senderId': widget.mentorId,
+          'senderId': FirebaseAuth.instance.currentUser!.uid,
           'senderRole': "mentor",      // mark role
           'mentorId': widget.mentorId,
           'studentId': widget.studentId,

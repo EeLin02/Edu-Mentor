@@ -191,6 +191,8 @@ class _StudentSubjectClassDetailsScreenState
                   context,
                   '/studentAnnouncement',
                   arguments: {
+                    'schoolId': widget.schoolId,
+                    'programmeId': widget.programmeId,
                     'subjectId': widget.subjectId,
                     'subjectName': subjectName,
                     'sectionId': widget.sectionId,
@@ -198,6 +200,7 @@ class _StudentSubjectClassDetailsScreenState
                     'color': color,
                   },
                 );
+
               },
             ),
 

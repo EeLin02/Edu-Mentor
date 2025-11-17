@@ -123,7 +123,7 @@ class _StudentClassChatScreenState extends State<StudentClassChatScreen> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => PrivateChatScreen(
+                                builder: (_) => StudentPrivateChatScreen(
                                   mentorId: widget.mentorId,
                                   mentorName: mentorName,
                                 ),

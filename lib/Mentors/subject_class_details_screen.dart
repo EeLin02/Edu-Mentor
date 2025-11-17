@@ -61,6 +61,8 @@ class SubjectSectionDetailsScreen extends StatelessWidget {
               textColor: textColor,
               onTap: () {
                 Navigator.pushNamed(context, '/announcement', arguments: {
+                  'schoolId': schoolId,
+                  'programmeId': programmeId,
                   'subjectId': subjectId,
                   'sectionId': sectionId,
                   'mentorId': mentorId,

@@ -8,6 +8,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:month_year_picker/month_year_picker.dart';
 
+import 'dart:convert';
 
 import 'package:provider/provider.dart';
 
@@ -21,6 +22,7 @@ import 'student_dashboard.dart';
 
 import 'Mentors/announcement_screen.dart';
 import 'Mentors/chat_to_students.dart';
+import 'Mentors/private_chat_screen.dart';
 import 'Mentors/share_resource_screen.dart';
 import 'Mentors/create_announcement_screen.dart';
 import 'Mentors/create_resource_screen.dart';
@@ -55,6 +57,9 @@ void _handleNotificationTap(String announcementId) {
 }
 
 
+
+
+
 // Local notification plugin instance
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 FlutterLocalNotificationsPlugin();
@@ -86,10 +91,54 @@ void main() async {
 
   // When app opened from notification
   FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
-    print("Notification tapped: ${message.data}");
+    print("🔥 Notification TAP TRIGGERED!");
+    print("🔥 TAP DATA CONTENT: ${message.data}");
+    final data = message.data;
 
-    final route = message.data['route'];
-    final announcementId = message.data['announcementId'];
+    print("🔥 NOTIFICATION TAP DATA: $data");
+
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUid == null) return;
+
+    // ========== CHAT NOTIFICATION ==========
+    if (data.containsKey("chatId")) {
+      final chatId = data["chatId"];
+      final mentorId = data["mentorId"];
+      final studentId = data["studentId"];
+      final studentName = data["studentName"] ?? "Student";
+
+      if (chatId == null || chatId.isEmpty) {
+        print("❌ chatId missing — cannot open chat");
+        return;
+      }
+
+      // Student opening chat
+      if (currentUid == studentId) {
+        navigatorKey.currentState?.push(MaterialPageRoute(
+          builder: (_) => StudentPrivateChatScreen(
+            mentorId: mentorId,
+            mentorName: "Mentor",
+          ),
+        ));
+        return;
+      }
+
+      // Mentor opening chat
+      if (currentUid == mentorId) {
+        navigatorKey.currentState?.push(MaterialPageRoute(
+          builder: (_) => PrivateChatScreen(
+            studentId: studentId,
+            studentName: studentName,
+            mentorId: mentorId,
+          ),
+        ));
+        return;
+      }
+    }
+
+    // ========== ANNOUNCEMENT NOTIFICATION ==========
+    final route = data['route'];
+    final announcementId = data['announcementId'];
 
     if (route == '/previewAnnouncement' && announcementId != null) {
       final doc = await FirebaseFirestore.instance
@@ -100,16 +149,13 @@ void main() async {
       if (doc.exists) {
         navigatorKey.currentState?.pushNamed(
           '/previewAnnouncement',
-          arguments: {
-            "data": doc.data(),
-            "color": Colors.teal,
-          },
+          arguments: {"data": doc.data(), "color": Colors.teal},
         );
-      } else {
-        print(" Announcement not found in Firestore");
       }
+      return;
     }
   });
+
 
   // When app launched from terminated state via notification
   RemoteMessage? initialMessage =
@@ -138,7 +184,8 @@ void main() async {
 
   // Foreground message listener
   FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-    print("📩 Foreground message received: ${message.notification?.title}");
+    print("Foreground message received: ${message.notification?.title}");
+    print("Foreground DATA: ${message.data}");
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid != null) {
@@ -148,7 +195,7 @@ void main() async {
           .get();
 
       if (doc.exists && doc.data()?['notificationsEnabled'] == false) {
-        print("🔕 Notifications disabled for this user, skipping...");
+        print("Notifications disabled for this user, skipping...");
         return; // Stop here
       }
     }
@@ -172,8 +219,9 @@ void main() async {
         message.notification!.title,
         message.notification!.body,
         platformChannelSpecifics,
-        payload: message.data['announcementId'],
+        payload: jsonEncode(message.data),  // send full data, NOT announcementId
       );
+
     }
   });
 
@@ -192,18 +240,92 @@ void main() async {
 
   await flutterLocalNotificationsPlugin.initialize(
     initializationSettings,
-    onDidReceiveNotificationResponse: (NotificationResponse response) {
-      if (response.payload != null) {
-        navigatorKey.currentState?.pushNamed(
-          '/studentAnnouncement',
-          arguments: {
-            "announcementId": response.payload!,
-            "color": Colors.teal,
-          },
-        );
+    onDidReceiveNotificationResponse: (NotificationResponse response) async{
+      final rawPayload = response.payload;
+
+      if (rawPayload == null || rawPayload.isEmpty) {
+        print("❌ Notification tapped but payload empty");
+        return;
       }
-    },
+
+      Map<String, dynamic> payloadData = {};
+
+      try {
+        payloadData = jsonDecode(rawPayload);
+      } catch (e) {
+        print("❌ Failed to decode payload: $e");
+        print("❌ Raw payload was: $rawPayload");
+        return;
+      }
+
+      print("🔥 LOCAL TAP DATA: $payloadData");
+
+      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+      if (currentUid == null) return;
+
+      // 👉 CHAT NOTIFICATION
+      if (payloadData.containsKey("chatId")) {
+        final chatId = payloadData["chatId"];
+        final mentorId = payloadData["mentorId"];
+        final studentId = payloadData["studentId"];
+        final studentName = payloadData["studentName"] ?? "Student";
+
+        print("🔥 Opening chat: chatId=$chatId");
+
+        if (currentUid == studentId) {
+          navigatorKey.currentState?.push(MaterialPageRoute(
+            builder: (_) =>
+                StudentPrivateChatScreen(
+                  mentorId: mentorId,
+                  mentorName: "Mentor",
+                ),
+          ));
+          return;
+        }
+
+        if (currentUid == mentorId) {
+          navigatorKey.currentState?.push(MaterialPageRoute(
+            builder: (_) =>
+                PrivateChatScreen(
+                  studentId: studentId,
+                  studentName: studentName,
+                  mentorId: mentorId,
+                ),
+          ));
+          return;
+        }
+      }
+
+      // 👉 ANNOUNCEMENT NOTIFICATION
+      if (payloadData["route"] == "/previewAnnouncement" &&
+          payloadData["announcementId"] != null) {
+        final announcementId = payloadData["announcementId"];
+
+        print("🔥 Opening announcement: $announcementId");
+
+        final doc = await FirebaseFirestore.instance
+            .collection('announcements')
+            .doc(announcementId)
+            .get();
+
+        if (doc.exists) {
+          navigatorKey.currentState?.pushNamed(
+            '/previewAnnouncement',
+            arguments: {
+              "data": doc.data(),
+              "color": Colors.teal,
+            },
+          );
+        } else {
+          print("❌ Announcement doc not found");
+        }
+
+        return;
+      }
+    }
   );
+
+
 
 
   runApp(
@@ -251,13 +373,15 @@ class MyApp extends StatelessWidget {
         '/announcement': (context) => const AnnouncementScreen(),
         '/studentAnnouncement': (context) => const StudentAnnouncementScreen(),
 
-
         '/createAnnouncement': (context) {
           final args = ModalRoute.of(context)!.settings.arguments as Map;
+
           return CreateAnnouncementScreen(
+            schoolId: args['schoolId'],
+            programmeId: args['programmeId'],
             subjectId: args['subjectId'],
-            subjectName: args['subjectName'],
             sectionId: args['sectionId'],
+            subjectName: args['subjectName'],
             sectionName: args['sectionName'],
             color: args['color'],
             announcementId: args['announcementId'],
@@ -265,9 +389,11 @@ class MyApp extends StatelessWidget {
             description: args['description'],
             files: args['files'],
             externalLinks: List<String>.from(args['externalLinks'] ?? []),
-
           );
         },
+
+
+
         '/previewAnnouncement': (context) {
           final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
           return PreviewAnnouncementScreen(data: args['data'],color: args['color'],);
@@ -296,9 +422,9 @@ class MyApp extends StatelessWidget {
           );
         },
 
-        '/privateChat': (context) {
+        '/studentPrivateChat': (context) {
           final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-          return PrivateChatScreen(
+          return StudentPrivateChatScreen(
             mentorId: args['mentorId'],
             mentorName: args['mentorName'],
           );
