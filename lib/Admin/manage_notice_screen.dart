@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:video_player/video_player.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'edit_notice_screen.dart';  // Import the new edit screen
+import 'edit_notice_screen.dart';
 import 'comments_view.dart';
 import '../file_preview_screen.dart';
 
@@ -165,7 +165,7 @@ class _ManageNoticesScreenState extends State<ManageNoticesScreen> {
               final fileUrls = List<String>.from(notice['fileUrls'] ?? []);
               final fileNames = List<String>.from(notice['fileNames'] ?? []);
 
-              // ✅ Only declare once
+              // Only declare once
               final currentUser = FirebaseAuth.instance.currentUser;
               final noticeData = notice.data() as Map<String, dynamic>? ?? {};
               final likedUserIds = List<String>.from(noticeData['likes'] ?? []);
@@ -274,7 +274,7 @@ class _ManageNoticesScreenState extends State<ManageNoticesScreen> {
                         children: List.generate(fileUrls.length, (fileIndex) {
                           final fileUrl = fileUrls[fileIndex];
 
-                          // ✅ Safe filename extraction (fallback if fileNames shorter)
+                          // Safe filename extraction (fallback if fileNames shorter)
                           String fileName;
                           if (fileIndex < fileNames.length) {
                             fileName = fileNames[fileIndex];
@@ -301,7 +301,7 @@ class _ManageNoticesScreenState extends State<ManageNoticesScreen> {
                             fileWidget = Icon(Icons.insert_drive_file, size: 40, color: Colors.blue);
                           }
 
-                          // 👇 Wrap with GestureDetector to open FilePreviewScreen
+                          //  Wrap with GestureDetector to open FilePreviewScreen
                           return GestureDetector(
                             onTap: () {
                               Navigator.push(

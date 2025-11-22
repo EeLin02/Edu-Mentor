@@ -274,7 +274,7 @@ class _ManageAccountsScreenState extends State<ManageAccountsScreen> {
 
                     final accounts = [...students, ...mentors];
 
-                    // 🔍 Apply filters
+                    //  Apply filters
                     final filtered = accounts.where((u) {
                       final matchesRole =
                           selectedRoleFilter == 'All' || u['role'] == selectedRoleFilter;

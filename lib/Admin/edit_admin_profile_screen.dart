@@ -362,7 +362,7 @@ class _AdminEditProfileScreenState extends State<AdminEditProfileScreen> {
                   Navigator.pop(context);
 
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("✅ Password changed successfully")),
+                    const SnackBar(content: Text(" Password changed successfully")),
                   );
                 } on FirebaseAuthException catch (e) {
                   String message;

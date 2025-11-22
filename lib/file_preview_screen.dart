@@ -21,7 +21,7 @@ class FilePreviewScreen extends StatelessWidget {
     required this.fileName,
   }) : super(key: key);
 
-  /// ✅ Open external links safely
+  ///  Open external links safely
   Future<void> _openLink(BuildContext context, String url) async {
     String rawLink = url.trim();
     if (!rawLink.startsWith('http://') && !rawLink.startsWith('https://')) {
@@ -50,7 +50,7 @@ class FilePreviewScreen extends StatelessWidget {
     }
   }
 
-  /// ✅ Download file with permission handling
+  ///  Download file with permission handling
   Future<void> _downloadFile(BuildContext context, String url, String filename) async {
     final status = await _checkPermission();
 
@@ -82,7 +82,7 @@ class FilePreviewScreen extends StatelessWidget {
     }
   }
 
-  /// ✅ Check permissions depending on Android version
+  ///  Check permissions depending on Android version
   Future<bool> _checkPermission() async {
     final androidInfo = await DeviceInfoPlugin().androidInfo;
     if (androidInfo.version.sdkInt >= 33) {
@@ -149,7 +149,7 @@ class FilePreviewScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text("Preview"), // ✅ show real filename, not just "Preview"
+        title: Text("Preview"),
         backgroundColor: Colors.deepPurple,
         foregroundColor: Colors.white,
         actions: [
@@ -185,7 +185,7 @@ class FilePreviewScreen extends StatelessWidget {
 }
 
 //
-// ✅ Chewie Video Player
+//  Chewie Video Player
 //
 class ChewieVideoPlayer extends StatefulWidget {
   final String videoUrl;
@@ -232,7 +232,7 @@ class _ChewieVideoPlayerState extends State<ChewieVideoPlayer> {
 }
 
 //
-// ✅ PDF Preview
+// PDF Preview
 //
 class PdfViewWidget extends StatefulWidget {
   final String fileUrl;

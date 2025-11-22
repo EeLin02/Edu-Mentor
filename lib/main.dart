@@ -46,20 +46,6 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   print("Handling a background message: ${message.messageId}");
 }
 
-void _handleNotificationTap(String announcementId) {
-  navigatorKey.currentState?.pushNamed(
-    '/studentAnnouncement',
-    arguments: {
-      "announcementId": announcementId,
-      "color": Colors.teal,
-    },
-  );
-}
-
-
-
-
-
 // Local notification plugin instance
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 FlutterLocalNotificationsPlugin();
@@ -91,11 +77,11 @@ void main() async {
 
   // When app opened from notification
   FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
-    print("🔥 Notification TAP TRIGGERED!");
-    print("🔥 TAP DATA CONTENT: ${message.data}");
+    print("Notification TAP TRIGGERED!");
+    print("TAP DATA CONTENT: ${message.data}");
     final data = message.data;
 
-    print("🔥 NOTIFICATION TAP DATA: $data");
+    print("NOTIFICATION TAP DATA: $data");
 
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
     if (currentUid == null) return;
@@ -108,7 +94,7 @@ void main() async {
       final studentName = data["studentName"] ?? "Student";
 
       if (chatId == null || chatId.isEmpty) {
-        print("❌ chatId missing — cannot open chat");
+        print("chatId missing — cannot open chat");
         return;
       }
 
@@ -244,7 +230,7 @@ void main() async {
       final rawPayload = response.payload;
 
       if (rawPayload == null || rawPayload.isEmpty) {
-        print("❌ Notification tapped but payload empty");
+        print(" Notification tapped but payload empty");
         return;
       }
 
@@ -253,24 +239,24 @@ void main() async {
       try {
         payloadData = jsonDecode(rawPayload);
       } catch (e) {
-        print("❌ Failed to decode payload: $e");
-        print("❌ Raw payload was: $rawPayload");
+        print("Failed to decode payload: $e");
+        print("Raw payload was: $rawPayload");
         return;
       }
 
-      print("🔥 LOCAL TAP DATA: $payloadData");
+      print(" LOCAL TAP DATA: $payloadData");
 
       final currentUid = FirebaseAuth.instance.currentUser?.uid;
       if (currentUid == null) return;
 
-      // 👉 CHAT NOTIFICATION
+      //  CHAT NOTIFICATION
       if (payloadData.containsKey("chatId")) {
         final chatId = payloadData["chatId"];
         final mentorId = payloadData["mentorId"];
         final studentId = payloadData["studentId"];
         final studentName = payloadData["studentName"] ?? "Student";
 
-        print("🔥 Opening chat: chatId=$chatId");
+        print(" Opening chat: chatId=$chatId");
 
         if (currentUid == studentId) {
           navigatorKey.currentState?.push(MaterialPageRoute(
@@ -296,12 +282,12 @@ void main() async {
         }
       }
 
-      // 👉 ANNOUNCEMENT NOTIFICATION
+      // ANNOUNCEMENT NOTIFICATION
       if (payloadData["route"] == "/previewAnnouncement" &&
           payloadData["announcementId"] != null) {
         final announcementId = payloadData["announcementId"];
 
-        print("🔥 Opening announcement: $announcementId");
+        print(" Opening announcement: $announcementId");
 
         final doc = await FirebaseFirestore.instance
             .collection('announcements')
@@ -317,7 +303,7 @@ void main() async {
             },
           );
         } else {
-          print("❌ Announcement doc not found");
+          print(" Announcement doc not found");
         }
 
         return;
@@ -355,7 +341,7 @@ class MyApp extends StatelessWidget {
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
-        MonthYearPickerLocalizations.delegate, // <- add this
+        MonthYearPickerLocalizations.delegate,
       ],
       supportedLocales: [
         const Locale('en', ''),
@@ -469,7 +455,7 @@ class MyApp extends StatelessWidget {
         '/takeAttendance': (context) {
           final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
           return TakeAttendanceScreen(
-            schoolId: args['schoolId'],          // 🔥 Missing before
+            schoolId: args['schoolId'],
             programmeId: args['programmeId'],
             subjectId: args['subjectId'],
             sectionId: args['sectionId'],

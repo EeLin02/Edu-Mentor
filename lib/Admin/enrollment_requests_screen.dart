@@ -46,7 +46,7 @@ class _EnrollmentRequestsScreenState extends State<EnrollmentRequestsScreen> {
       final oldSectionId = data["currentSectionId"];
       final newSectionId = data["requestedSectionId"];
 
-      // ✅ decrement old
+      //  decrement old
       if (oldSectionId != null && oldSectionId != newSectionId) {
         final oldRef = _firestore
             .collection("schools").doc(data["schoolId"])
@@ -58,7 +58,7 @@ class _EnrollmentRequestsScreenState extends State<EnrollmentRequestsScreen> {
         }, SetOptions(merge: true));
       }
 
-      // ✅ increment new
+      //  increment new
       if (newSectionId != null && oldSectionId != newSectionId) {
         final newRef = _firestore
             .collection("schools").doc(data["schoolId"])

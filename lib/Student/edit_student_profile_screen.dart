@@ -204,7 +204,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
       }
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     } catch (e) {
-      print('⚠️ Unknown error: $e');
+      print(' Unknown error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('An unexpected error occurred.')),
       );
@@ -308,7 +308,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                 Navigator.pop(context);
 
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("✅ Password changed successfully")),
+                  const SnackBar(content: Text(" Password changed successfully")),
                 );
               } on FirebaseAuthException catch (e) {
                 String message;
@@ -329,7 +329,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
               } catch (e) {
-                print('⚠️ Unknown error: $e');
+                print(' Unknown error: $e');
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('An unexpected error occurred.')));

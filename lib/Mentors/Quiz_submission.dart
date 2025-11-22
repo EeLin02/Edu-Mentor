@@ -140,7 +140,6 @@ class SubmissionDetailScreen extends StatelessWidget {
                           }
 
                           // Handle student's submitted answer
-                          // Handle student's submitted answer
                           final studentRawAnswer = answersMap[qId];
                           String studentAnswer = "(No Answer)";
 

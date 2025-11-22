@@ -626,12 +626,12 @@ class _SectionDetailsScreenState extends State<SectionDetailsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text("${widget.subjectName} - ${widget.sectionName}"), // ✅ AppBar shows both
+        title: Text("${widget.subjectName} - ${widget.sectionName}"), //  AppBar shows both
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ✅ Subject + Section + Mentors block
+          //  Subject + Section + Mentors block
           Padding(
             padding: EdgeInsets.all(8),
             child: Column(
@@ -650,7 +650,7 @@ class _SectionDetailsScreenState extends State<SectionDetailsScreen> {
             ),
           ),
 
-          // 🔎 Search bar
+          //  Search bar
           Padding(
             padding: EdgeInsets.all(8),
             child: TextField(
@@ -664,7 +664,7 @@ class _SectionDetailsScreenState extends State<SectionDetailsScreen> {
             ),
           ),
 
-          // 👩‍🎓 Student list
+          //  Student list
           Expanded(
             child: ListView.builder(
               itemCount: filtered.length,

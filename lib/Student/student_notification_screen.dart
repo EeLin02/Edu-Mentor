@@ -41,7 +41,7 @@ class _StudentNotificationScreenState extends State<StudentNotificationScreen> {
         final schoolId = data['schoolId'];
         final sectionId = data['sectionId'];
 
-        // 🔹 Get subject document
+        // Get subject document
         final subjectDoc = await FirebaseFirestore.instance
             .collection('schools')
             .doc(schoolId)
@@ -51,7 +51,7 @@ class _StudentNotificationScreenState extends State<StudentNotificationScreen> {
             .doc(subjectId)
             .get();
 
-        // 🔹 Get section document
+        // Get section document
         final sectionDoc = await FirebaseFirestore.instance
             .collection('schools')
             .doc(schoolId)
@@ -63,7 +63,7 @@ class _StudentNotificationScreenState extends State<StudentNotificationScreen> {
             .doc(sectionId)
             .get();
 
-        // 🔹 Get student customization (color)
+        // Get student customization (color)
         final customizationQuery = await FirebaseFirestore.instance
             .collection('studentCustomizations')
             .where('studentId', isEqualTo: userId)
@@ -95,7 +95,7 @@ class _StudentNotificationScreenState extends State<StudentNotificationScreen> {
             'subjectName': subjectData['name'] ?? '',
             'subjectCode': subjectData['code'] ?? '',
 
-            // ✅ attach color if found
+            //  attach color if found
             'color': customColor,
           });
         }
@@ -179,7 +179,7 @@ class _StudentNotificationScreenState extends State<StudentNotificationScreen> {
                 itemBuilder: (context, index) {
                   final data = docs[index].data() as Map<String, dynamic>;
 
-                  // 🔹 Find the enrolled subject details for this announcement
+                  //  Find the enrolled subject details for this announcement
                   final subjectInfo = enrolledSubjects.firstWhere(
                         (enroll) =>
                     enroll['subjectId'] == data['subjectId'] &&

@@ -1216,8 +1216,8 @@ class _QuizSubmissionsScreenState extends State<QuizSubmissionsScreen> {
                       future: FirebaseFirestore.instance
                           .collection("subjectEnrollments")
                           .where("studentId", isEqualTo: studentId)
-                          .where("subjectId", isEqualTo: widget.subjectId) // ✅ from parent
-                          .where("sectionId", isEqualTo: widget.sectionId) // ✅ from parent
+                          .where("subjectId", isEqualTo: widget.subjectId) //  from parent
+                          .where("sectionId", isEqualTo: widget.sectionId) //  from parent
                           .get(),
                       builder: (context, enrollSnap) {
                         if (!enrollSnap.hasData) {

@@ -38,14 +38,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
 
     try {
-      // 🔍 Step 1: Check if email exists in Firestore (students/mentors/admins)
+      //  Step 1: Check if email exists in Firestore (students/mentors/admins)
       final exists = await _emailExistsInFirestore(email);
       if (!exists) {
         _showMessage("Email not found in our system. Please contact admin.");
         return;
       }
 
-      // 🔐 Step 2: Send Firebase Auth password reset email
+      //  Step 2: Send Firebase Auth password reset email
       await _auth.sendPasswordResetEmail(email: email);
       _showMessage("Password reset link has been sent to your email.");
     } on FirebaseAuthException catch (e) {

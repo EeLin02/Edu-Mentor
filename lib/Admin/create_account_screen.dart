@@ -543,7 +543,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   },
                 ),
 
-// Programme selection for student
+              // Programme selection for student
               if (selectedRole == 'Student' && selectedSchool != null)
                 StreamBuilder<QuerySnapshot>(
                   stream: _firestore
@@ -571,7 +571,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   },
                 ),
 
-// Programme selection for mentor (multiple)
+              // Programme selection for mentor (multiple)
               if (selectedRole == 'Mentor' && selectedSchool != null)
                 StreamBuilder<QuerySnapshot>(
                   stream: _firestore

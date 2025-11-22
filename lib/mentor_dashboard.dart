@@ -58,7 +58,7 @@ class _MentorDashboardState extends State<MentorDashboard> {
         setState(() {
           mentorId = user.uid;
         });
-        await _fetchProgrammesAndSections(user.uid); // ✅ pass mentorId
+        await _fetchProgrammesAndSections(user.uid); //  pass mentorId
       } else {
         setState(() {
           isLoading = false;
@@ -93,7 +93,7 @@ class _MentorDashboardState extends State<MentorDashboard> {
           .where("mentorId", isEqualTo: mentorId)
           .get();
 
-      print("📥 Found ${subjectMentorSnapshot.docs.length} subjectMentor docs for mentorId=$mentorId");
+      print(" Found ${subjectMentorSnapshot.docs.length} subjectMentor docs for mentorId=$mentorId");
 
       if (subjectMentorSnapshot.docs.isEmpty) {
         setState(() {
@@ -130,7 +130,7 @@ class _MentorDashboardState extends State<MentorDashboard> {
         final sectionId   = data['sectionId']?.toString();
 
         if ([schoolId, programmeId, subjectId, sectionId].contains(null)) {
-          print("⚠️ Skipping subjectMentor ${doc.id}, missing ids → $data");
+          print(" Skipping subjectMentor ${doc.id}, missing ids → $data");
           continue;
         }
 
@@ -184,7 +184,7 @@ class _MentorDashboardState extends State<MentorDashboard> {
               cardColor = Color(int.parse(storedColor.toString()));
             }
           } catch (e) {
-            print("⚠️ Failed to parse color: $storedColor → $e");
+            print(" Failed to parse color: $storedColor → $e");
           }
         }
 
@@ -209,10 +209,10 @@ class _MentorDashboardState extends State<MentorDashboard> {
       // --- Step 5: Apply favorites filter ---
       Map<String, List<Map<String, dynamic>>> filteredData = {};
       if (favoriteIds.isEmpty) {
-        // ✅ Show all courses if no favorites selected
+        //  Show all courses if no favorites selected
         filteredData = tempProgrammesData;
       } else {
-        // ✅ Only keep starred ones
+        //  Only keep starred ones
         tempProgrammesData.forEach((programmeName, items) {
           final favItems = items.where((item) {
             final key = "${item['subjectId']}_${item['sectionId']}";
@@ -434,7 +434,7 @@ class _MentorDashboardState extends State<MentorDashboard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ✅ Header row: Courses + All Courses
+            //  Header row: Courses + All Courses
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -476,7 +476,7 @@ class _MentorDashboardState extends State<MentorDashboard> {
             ),
             const SizedBox(height: 10),
 
-            // ✅ Courses list
+            //  Courses list
             Expanded(
               child: ListView.builder(
                 itemCount: programmesData.length,
@@ -660,7 +660,7 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
       //allCourses = widget.initialCourses!;
       programmeList = allCourses.keys.toList();
       favoriteIds = widget.initialFavorites ?? {};
-      //isLoading = false; // 🔥 no need to refresh
+      //isLoading = false; //  no need to refresh
     }
 
     // Refresh the background again to ensure it is the latest
@@ -766,7 +766,7 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
               cardColor = Color(int.parse(storedColor.toString()));
             }
           } catch (e) {
-            print("⚠️ Failed to parse color: $storedColor → $e");
+            print(" Failed to parse color: $storedColor → $e");
           }
         }
 
@@ -845,7 +845,7 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
         appBar: AppBar(
           title: Text("All Courses"),
           actions: [
-            // 🔎 search
+            //  search
             IconButton(
               icon: Icon(Icons.search),
               onPressed: () async {
@@ -873,7 +873,7 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
             ? Center(child: CircularProgressIndicator())
             : Column(
           children: [
-            // 🔽 Programme filter dropdown
+            //  Programme filter dropdown
             if (programmeList.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.all(8),
@@ -894,14 +894,14 @@ class _MentorAllCoursesScreenState extends State<MentorAllCoursesScreen> {
                 ),
               ),
 
-            // ✅ List
+            //  List
             Expanded(
               child: ListView.builder(
                 itemCount: allCourses.length,
                 itemBuilder: (context, index) {
                   final progName = allCourses.keys.elementAt(index);
 
-                  // 🔥 Apply programme filter
+                  //  Apply programme filter
                   if (selectedProgramme != null &&
                       progName != selectedProgramme) {
                     return SizedBox.shrink();

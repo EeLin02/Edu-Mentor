@@ -79,26 +79,26 @@ class _StudentNotesPageState extends State<StudentNotesPage> {
               timestamp != null ? _formatTimestamp(timestamp) : "No timestamp";
 
               return Card(
-                elevation: 6, // ⬆️ stronger shadow
+                elevation: 6, // ⬆ stronger shadow
                 shadowColor: Colors.black.withOpacity(0.3), // soft dark shadow
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
                 margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                color: Colors.white, // ✅ solid white for contrast
+                color: Colors.white, //  solid white for contrast
                 child: ListTile(
                   leading: Icon(Icons.note_alt_outlined, color: color, size: 32),
                   title: Text(
                     title,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: Colors.black, // ✅ title in black
+                      color: Colors.black, //  title in black
                     ),
                   ),
                   subtitle: Text(
                     "Saved on $formattedTime",
                     style: const TextStyle(
-                      color: Colors.black54, // ✅ readable grey text
+                      color: Colors.black54, //  readable grey text
                     ),
                   ),
                   onTap: () async {

@@ -87,8 +87,8 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
       return;
     }
 
-    print("🔎 Saving enrollments with: schoolId=$schoolId, programmeId=$programmeId");
-    print("🔎 Selected sections: $selectedSections");
+    print("Saving enrollments with: schoolId=$schoolId, programmeId=$programmeId");
+    print("Selected sections: $selectedSections");
 
     final batch = _firestore.batch();
 
@@ -96,23 +96,23 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
       final subjectId = entry.key;
       final sectionId = entry.value;
 
-      // 👉 Add debug print here
+      // Add debug print here
       print("schoolId=$schoolId, programmeId=$programmeId, subjectId=$subjectId, sectionId=$sectionId");
 
-      // 👉 Add guard here
+      //  Add guard here
       if (subjectId.isEmpty || sectionId == null || sectionId.isEmpty) {
-        print("⚠️ Skipping invalid subject/section");
+        print(" Skipping invalid subject/section");
         continue;
       }
 
-      print("➡️ Processing subjectId=$subjectId, sectionId=$sectionId");
+      print(" Processing subjectId=$subjectId, sectionId=$sectionId");
 
       if (subjectId.isEmpty || sectionId == null || sectionId.isEmpty) {
-        print("⚠️ Skipping invalid subject/section");
+        print(" Skipping invalid subject/section");
         continue;
       }
 
-      // ✅ Fetch subject + section docs
+      //  Fetch subject + section docs
       final subjectDoc = await _firestore
           .collection("schools")
           .doc(schoolId)
@@ -167,7 +167,7 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
     try {
       await batch.commit();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("✅ Enrollment saved successfully!")),
+        SnackBar(content: Text(" Enrollment saved successfully!")),
       );
       setState(() {
         selectedSections.clear();
@@ -365,7 +365,7 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
       );
     }
 
-    // ✅ Always listen for subject updates
+    // Always listen for subject updates
     return StreamBuilder<DocumentSnapshot>(
       stream: _firestore
           .collection("schools")
@@ -387,7 +387,7 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
         final subjectName = subjData["name"] ?? "Unnamed Subject";
         final subjectCode = subjData["code"] ?? "";
 
-        // ✅ Always listen for section updates
+        // Always listen for section updates
         return StreamBuilder<DocumentSnapshot>(
           stream: _firestore
               .collection("schools")
@@ -420,7 +420,7 @@ class _StudentEnrollScreenState extends State<StudentEnrollScreen> {
             final secData = secSnap.data!.data() as Map<String, dynamic>;
             final sectionName = secData["name"] ?? sectionId;
 
-            // ✅ Still listen for pending requests
+            // Still listen for pending requests
             return StreamBuilder<DocumentSnapshot?>(
               stream: _getPendingRequest(subjectId, sectionId),
               builder: (context, reqSnap) {

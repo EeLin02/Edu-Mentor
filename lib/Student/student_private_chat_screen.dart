@@ -627,7 +627,7 @@ class _StudentPrivateChatScreenState extends State<StudentPrivateChatScreen> {
 
     final snapshot = await FirebaseFirestore.instance
         .collection('privateChats')
-        .doc(chatDocId)   // now it's a String ✅
+        .doc(chatDocId)   // now it's a String
         .collection('messages')
         .where('senderId', isEqualTo: widget.mentorId)
         .where('status', isEqualTo: 'sent')

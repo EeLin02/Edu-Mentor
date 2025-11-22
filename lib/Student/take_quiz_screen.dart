@@ -43,9 +43,12 @@ class _TakeQuizScreenState extends State<TakeQuizScreen> {
 
   @override
   void dispose() {
+    // Loop through all TextEditingControllers stored in the 'controllers' map
+    // and dispose each one to free memory and prevent memory leaks.
     for (var c in controllers.values) {
       c.dispose();
     }
+    // Call the parent class's dispose method to complete the cleanup process.
     super.dispose();
   }
 

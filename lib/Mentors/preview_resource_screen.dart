@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../file_preview_screen.dart'; // ✅ import our new preview screen
+import '../file_preview_screen.dart'; //  import our new preview screen
 
 class PreviewResourceScreen extends StatelessWidget {
   final String subjectId;

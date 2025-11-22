@@ -79,7 +79,7 @@ class _StudentDashboardScreenState extends State<StudentDashboard> {
         final sectionId = data['sectionId'];
 
         if (schoolId == null || programmeId == null || subjectId == null || sectionId == null) {
-          print("⚠️ Skipping enrollment, missing IDs: $data");
+          print(" Skipping enrollment, missing IDs: $data");
           continue;
         }
 
@@ -94,7 +94,7 @@ class _StudentDashboardScreenState extends State<StudentDashboard> {
             .get();
 
         if (!subjectDoc.exists) {
-          print("⚠️ Skipping, subject not found: $subjectId");
+          print(" Skipping, subject not found: $subjectId");
           continue;
         }
 
@@ -111,7 +111,7 @@ class _StudentDashboardScreenState extends State<StudentDashboard> {
             .get();
 
         if (!sectionDoc.exists) {
-          print("⚠️ Skipping, section not found: $sectionId");
+          print(" Skipping, section not found: $sectionId");
           continue;
         }
 
@@ -140,7 +140,7 @@ class _StudentDashboardScreenState extends State<StudentDashboard> {
           'schoolId': schoolId,
           'programmeId': programmeId,
           'color': cardColor,
-          'isFavorite': favIds.contains(favKey), // ✅ mark favorite
+          'isFavorite': favIds.contains(favKey), // mark favorite
         });
       }
 
@@ -833,7 +833,7 @@ class _AllCoursesScreenState extends State<AllCoursesScreen> {
                   return Card(
                     margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    color: item['color'], // ✅ card background
+                    color: item['color'], //  card background
                     elevation: 4,
                     child: ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -898,5 +898,3 @@ class _AllCoursesScreenState extends State<AllCoursesScreen> {
     );
   }
 }
-
-
